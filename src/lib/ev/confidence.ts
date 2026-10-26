@@ -55,10 +55,7 @@ export function minConfidence(...levels: ConfidenceLevel[]): ConfidenceLevel {
  *         contributing >= 5% of EV is marked low-confidence by its curator.
  * low     anything else (user assumptions, unknown sources, sparse samples).
  */
-export function classifyPullRateConfidence(
-  slots: SlotResult[],
-  status: EvResult["status"],
-): ConfidenceLevel {
+export function classifyPullRateConfidence(slots: SlotResult[], status: EvResult["status"]): ConfidenceLevel {
   if (status === "insufficient") return "insufficient";
   const outcomes = slots.flatMap((s) => s.outcomes).filter((o) => o.probability && !o.probability.isZero());
   if (outcomes.length === 0) return "insufficient";

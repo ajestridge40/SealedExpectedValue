@@ -31,14 +31,20 @@ function StatusBadge({ s }: { s: PriceStatus }) {
 
 type Sort = "value" | "gain" | "gain_pct" | "name" | "added";
 
-export default async function CollectionPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function CollectionPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const sp = await searchParams;
   const { entries, totals, currency } = await getCollection();
   const type = param(sp, "type");
   const q = param(sp, "q")?.toLowerCase();
   const view = param(sp, "view") === "grid" ? "grid" : "table";
   const status = param(sp, "status");
-  const sort = (["value", "gain", "gain_pct", "name", "added"].includes(param(sp, "sort") ?? "") ? param(sp, "sort") : "value") as Sort;
+  const sort = (
+    ["value", "gain", "gain_pct", "name", "added"].includes(param(sp, "sort") ?? "") ? param(sp, "sort") : "value"
+  ) as Sort;
 
   if (entries.length === 0) {
     return (
@@ -49,8 +55,16 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
           title="Start tracking your collection"
           action={
             <div className="flex flex-wrap justify-center gap-2">
-              <Button asChild variant="primary"><Link href="/collection/add?type=sealed"><Plus /> Add sealed product</Link></Button>
-              <Button asChild><Link href="/collection/add?type=card"><Plus /> Add a card</Link></Button>
+              <Button asChild variant="primary">
+                <Link href="/collection/add?type=sealed">
+                  <Plus /> Add sealed product
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link href="/collection/add?type=card">
+                  <Plus /> Add a card
+                </Link>
+              </Button>
             </div>
           }
         >
@@ -79,7 +93,10 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
       case "name":
         return a.itemName.localeCompare(b.itemName);
       case "added":
-        return Math.max(...b.lots.map((l) => Date.parse(byId.get(l.lot.id)!.createdAt))) - Math.max(...a.lots.map((l) => Date.parse(byId.get(l.lot.id)!.createdAt)));
+        return (
+          Math.max(...b.lots.map((l) => Date.parse(byId.get(l.lot.id)!.createdAt))) -
+          Math.max(...a.lots.map((l) => Date.parse(byId.get(l.lot.id)!.createdAt)))
+        );
       default:
         return num(b.marketValue) - num(a.marketValue);
     }
@@ -102,27 +119,61 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
         description="Valued at the latest stored market price. Missing or stale prices are flagged, never treated as current."
         actions={
           <>
-            <Button asChild variant="primary"><Link href="/collection/add"><Plus /> Add item</Link></Button>
-            <Button asChild><a href="/api/export/collection" download><Download /> Export CSV</a></Button>
+            <Button asChild variant="primary">
+              <Link href="/collection/add">
+                <Plus /> Add item
+              </Link>
+            </Button>
+            <Button asChild>
+              <a href="/api/export/collection" download>
+                <Download /> Export CSV
+              </a>
+            </Button>
           </>
         }
       />
-      {param(sp, "saved") ? <Notice tone="success" className="mb-4">Saved.</Notice> : null}
+      {param(sp, "saved") ? (
+        <Notice tone="success" className="mb-4">
+          Saved.
+        </Notice>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Market value" value={<Money value={primary.marketValue} currency={primary.currency} />} sub={`${primary.sealedQuantity} sealed · ${primary.cardQuantity} cards`} />
-        <Stat label="Total cost basis" value={<Money value={primary.costBasis} currency={primary.currency} />} sub="Incl. recorded fees and shipping" />
+        <Stat
+          label="Market value"
+          value={<Money value={primary.marketValue} currency={primary.currency} />}
+          sub={`${primary.sealedQuantity} sealed · ${primary.cardQuantity} cards`}
+        />
+        <Stat
+          label="Total cost basis"
+          value={<Money value={primary.costBasis} currency={primary.currency} />}
+          sub="Incl. recorded fees and shipping"
+        />
         <Stat
           label="Unrealized gain / loss"
           value={<Money value={primary.unrealizedGain} currency={primary.currency} signed />}
-          sub={<><Percent value={primary.unrealizedGainPct} /> on priced lots</>}
+          sub={
+            <>
+              <Percent value={primary.unrealizedGainPct} /> on priced lots
+            </>
+          }
         />
-        <Stat label="Sealed vs. cards" value={<Money value={primary.sealedValue} currency={primary.currency} />} sub={<>Cards: <Money value={primary.cardValue} currency={primary.currency} /></>} />
+        <Stat
+          label="Sealed vs. cards"
+          value={<Money value={primary.sealedValue} currency={primary.currency} />}
+          sub={
+            <>
+              Cards: <Money value={primary.cardValue} currency={primary.currency} />
+            </>
+          }
+        />
       </div>
       {primary.missingPriceLots || primary.stalePriceLots ? (
         <Notice tone="warn" className="mt-3">
           <AlertTriangle className="mr-1 inline size-4 align-text-bottom" aria-hidden />
-          {primary.missingPriceLots ? `${primary.missingPriceLots} lot(s) have no usable price and are excluded from market value and gain/loss. ` : ""}
+          {primary.missingPriceLots
+            ? `${primary.missingPriceLots} lot(s) have no usable price and are excluded from market value and gain/loss. `
+            : ""}
           {primary.stalePriceLots ? `${primary.stalePriceLots} lot(s) use a stale price.` : ""}
         </Notice>
       ) : null}
@@ -130,7 +181,10 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
         <Notice tone="info" className="mt-3">
           Also held in other currencies (not converted):{" "}
           {others.map((t) => (
-            <span key={t.currency} className="mr-3"><Money value={t.marketValue} currency={t.currency} /> value, <Money value={t.unrealizedGain} currency={t.currency} signed /> gain</span>
+            <span key={t.currency} className="mr-3">
+              <Money value={t.marketValue} currency={t.currency} /> value,{" "}
+              <Money value={t.unrealizedGain} currency={t.currency} signed /> gain
+            </span>
           ))}
         </Notice>
       ) : null}
@@ -166,35 +220,64 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
           </Select>
         </Field>
         <div className="col-span-2 flex items-center gap-2 sm:col-span-5">
-          <Button type="submit" size="sm">Apply</Button>
-          <Button asChild size="sm" variant="ghost"><Link href="/collection">Reset</Link></Button>
+          <Button type="submit" size="sm">
+            Apply
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/collection">Reset</Link>
+          </Button>
           <div className="ml-auto flex gap-1" aria-label="View">
-            <Button asChild size="icon" variant={view === "table" ? "secondary" : "ghost"} aria-label="Table view"><Link href={qs({ view: "table" })}><Rows3 /></Link></Button>
-            <Button asChild size="icon" variant={view === "grid" ? "secondary" : "ghost"} aria-label="Grid view"><Link href={qs({ view: "grid" })}><LayoutGrid /></Link></Button>
+            <Button asChild size="icon" variant={view === "table" ? "secondary" : "ghost"} aria-label="Table view">
+              <Link href={qs({ view: "table" })}>
+                <Rows3 />
+              </Link>
+            </Button>
+            <Button asChild size="icon" variant={view === "grid" ? "secondary" : "ghost"} aria-label="Grid view">
+              <Link href={qs({ view: "grid" })}>
+                <LayoutGrid />
+              </Link>
+            </Button>
           </div>
         </div>
       </form>
 
       {positions.length === 0 ? (
-        <p className="mt-6 text-sm text-muted">No items match these filters.</p>
+        <p className="text-muted mt-6 text-sm">No items match these filters.</p>
       ) : view === "grid" ? (
         <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {positions.map((p) => {
             const e = entryOf(p);
             return (
-              <li key={`${p.itemKey}|${p.currency}`} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
+              <li
+                key={`${p.itemKey}|${p.currency}`}
+                className="border-border bg-surface flex flex-col gap-2 rounded-xl border p-3"
+              >
                 <CatalogImage src={e.imageUrl} alt={p.itemName} aspect={e.type === "sealed" ? "square" : "card"} />
-                <div className="text-sm font-medium leading-tight">{e.href ? <Link href={e.href} className="hover:text-accent">{p.itemName}</Link> : p.itemName}</div>
-                <div className="text-xs text-muted">{p.quantity} owned · {p.lots.length} lot{p.lots.length > 1 ? "s" : ""}</div>
-                <div className="text-sm"><Money value={p.marketValue} currency={p.currency} /></div>
-                <div className="text-xs"><Money value={p.gain} currency={p.currency} signed /> (<Percent value={p.gainPct} />)</div>
+                <div className="text-sm leading-tight font-medium">
+                  {e.href ? (
+                    <Link href={e.href} className="hover:text-accent">
+                      {p.itemName}
+                    </Link>
+                  ) : (
+                    p.itemName
+                  )}
+                </div>
+                <div className="text-muted text-xs">
+                  {p.quantity} owned · {p.lots.length} lot{p.lots.length > 1 ? "s" : ""}
+                </div>
+                <div className="text-sm">
+                  <Money value={p.marketValue} currency={p.currency} />
+                </div>
+                <div className="text-xs">
+                  <Money value={p.gain} currency={p.currency} signed /> (<Percent value={p.gainPct} />)
+                </div>
                 <StatusBadge s={p.priceStatus} />
               </li>
             );
           })}
         </ul>
       ) : (
-        <div className="mt-4 rounded-xl border border-border bg-surface">
+        <div className="border-border bg-surface mt-4 min-w-0 rounded-xl border">
           <Table>
             <thead>
               <tr>
@@ -205,16 +288,16 @@ export default async function CollectionPage({ searchParams }: { searchParams: P
                 <Th className="text-right">Unit value</Th>
                 <Th className="text-right">Market value</Th>
                 <Th className="text-right">Gain / loss</Th>
-                <Th><span className="sr-only">Actions</span></Th>
+                <Th>
+                  <span className="sr-only">Actions</span>
+                </Th>
               </tr>
             </thead>
             <tbody>
               {positions.map((p) => {
                 const e = entryOf(p);
                 const multi = p.lots.length > 1;
-                return (
-                  <PositionRows key={`${p.itemKey}|${p.currency}`} p={p} e={e} multi={multi} byId={byId} />
-                );
+                return <PositionRows key={`${p.itemKey}|${p.currency}`} p={p} e={e} multi={multi} byId={byId} />;
               })}
             </tbody>
           </Table>
@@ -228,42 +311,88 @@ function LotActions({ e }: { e: CollectionEntry }) {
   return (
     <div className="flex justify-end gap-1">
       <Button asChild variant="ghost" size="icon" aria-label={`Edit ${e.name} lot`}>
-        <Link href={`/collection/edit/${e.type}/${e.id}`}><Pencil /></Link>
+        <Link href={`/collection/edit/${e.type}/${e.id}`}>
+          <Pencil />
+        </Link>
       </Button>
-      <ConfirmDelete action={deleteLot} fields={{ type: e.type, id: e.id }} size="icon" label={`Delete ${e.name} lot`} title="Delete this lot?" description={`Remove ${e.valuation.lot.quantity} × ${e.name} bought ${formatDate(e.valuation.lot.purchaseDate ?? null)} from your collection.`} />
+      <ConfirmDelete
+        action={deleteLot}
+        fields={{ type: e.type, id: e.id }}
+        size="icon"
+        label={`Delete ${e.name} lot`}
+        title="Delete this lot?"
+        description={`Remove ${e.valuation.lot.quantity} × ${e.name} bought ${formatDate(e.valuation.lot.purchaseDate ?? null)} from your collection.`}
+      />
     </div>
   );
 }
 
-function PositionRows({ p, e, multi, byId }: { p: PositionSummary; e: CollectionEntry; multi: boolean; byId: Map<string, CollectionEntry> }) {
+function PositionRows({
+  p,
+  e,
+  multi,
+  byId,
+}: {
+  p: PositionSummary;
+  e: CollectionEntry;
+  multi: boolean;
+  byId: Map<string, CollectionEntry>;
+}) {
   return (
     <>
       <tr className={cn(multi && "bg-surface-2/40")}>
         <Td>
           <div className="flex items-center gap-3">
-            <CatalogImage src={e.imageUrl} alt="" aspect={e.type === "sealed" ? "square" : "card"} className="w-9 shrink-0" />
+            <CatalogImage
+              src={e.imageUrl}
+              alt=""
+              aspect={e.type === "sealed" ? "square" : "card"}
+              className="w-9 shrink-0"
+            />
             <div>
-              <div className="font-medium">{e.href ? <Link href={e.href} className="hover:text-accent">{p.itemName}</Link> : p.itemName}</div>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+              <div className="font-medium">
+                {e.href ? (
+                  <Link href={e.href} className="hover:text-accent">
+                    {p.itemName}
+                  </Link>
+                ) : (
+                  p.itemName
+                )}
+              </div>
+              <div className="text-muted flex flex-wrap items-center gap-1.5 text-xs">
                 {e.type === "sealed" ? "Sealed" : "Card"}
                 {e.setName ? ` · ${e.setName}` : ""}
                 {!multi && e.detail ? ` · ${e.detail}` : ""}
                 {multi ? ` · ${p.lots.length} lots` : ""}
                 <StatusBadge s={p.priceStatus} />
-                {!multi && e.priceKind && e.priceKind !== "provider" ? <PriceKindBadge kind={e.priceKind} /> : null}
-                {!multi && e.valuation.warnings.length ? <Badge tone="warn" title={e.valuation.warnings.join(" ")}>Note</Badge> : null}
+                {!multi && e.priceKind === "csv_import" ? <PriceKindBadge kind={e.priceKind} /> : null}
+                {!multi && e.valuation.warnings.length ? (
+                  <Badge tone="warn" title={e.valuation.warnings.join(" ")}>
+                    Valued at raw price
+                  </Badge>
+                ) : null}
               </div>
             </div>
           </div>
         </Td>
         <Td className="text-right">{p.quantity}</Td>
-        <Td className="text-right"><Money value={p.averageUnitCost} currency={p.currency} /></Td>
-        <Td className="text-right"><Money value={p.costBasis} currency={p.currency} /></Td>
-        <Td className="text-right">{!multi ? <Money value={p.lots[0].unitValue} currency={p.currency} /> : null}</Td>
-        <Td className="text-right"><Money value={p.marketValue} currency={p.currency} /></Td>
         <Td className="text-right">
-          <div><Money value={p.gain} currency={p.currency} signed /></div>
-          <div className="text-xs"><Percent value={p.gainPct} /></div>
+          <Money value={p.averageUnitCost} currency={p.currency} />
+        </Td>
+        <Td className="text-right">
+          <Money value={p.costBasis} currency={p.currency} />
+        </Td>
+        <Td className="text-right">{!multi ? <Money value={p.lots[0].unitValue} currency={p.currency} /> : null}</Td>
+        <Td className="text-right">
+          <Money value={p.marketValue} currency={p.currency} />
+        </Td>
+        <Td className="text-right">
+          <div>
+            <Money value={p.gain} currency={p.currency} signed />
+          </div>
+          <div className="text-xs">
+            <Percent value={p.gainPct} />
+          </div>
         </Td>
         <Td>{!multi ? <LotActions e={e} /> : null}</Td>
       </tr>
@@ -271,18 +400,30 @@ function PositionRows({ p, e, multi, byId }: { p: PositionSummary; e: Collection
         ? p.lots.map((l) => {
             const le = byId.get(l.lot.id)!;
             return (
-              <tr key={l.lot.id} className="text-xs text-muted">
+              <tr key={l.lot.id} className="text-muted text-xs">
                 <Td className="pl-14">
                   Lot bought {formatDate(l.lot.purchaseDate ?? null)}
                   {le.detail ? ` · ${le.detail}` : ""} <StatusBadge s={l.priceStatus} />
                 </Td>
                 <Td className="text-right">{l.lot.quantity}</Td>
-                <Td className="text-right"><Money value={l.unitCostBasis} currency={p.currency} /></Td>
-                <Td className="text-right"><Money value={l.costBasis} currency={p.currency} /></Td>
-                <Td className="text-right"><Money value={l.unitValue} currency={p.currency} /></Td>
-                <Td className="text-right"><Money value={l.marketValue} currency={p.currency} /></Td>
-                <Td className="text-right"><Money value={l.gain} currency={p.currency} signed /> <Percent value={l.gainPct} /></Td>
-                <Td><LotActions e={le} /></Td>
+                <Td className="text-right">
+                  <Money value={l.unitCostBasis} currency={p.currency} />
+                </Td>
+                <Td className="text-right">
+                  <Money value={l.costBasis} currency={p.currency} />
+                </Td>
+                <Td className="text-right">
+                  <Money value={l.unitValue} currency={p.currency} />
+                </Td>
+                <Td className="text-right">
+                  <Money value={l.marketValue} currency={p.currency} />
+                </Td>
+                <Td className="text-right">
+                  <Money value={l.gain} currency={p.currency} signed /> <Percent value={l.gainPct} />
+                </Td>
+                <Td>
+                  <LotActions e={le} />
+                </Td>
               </tr>
             );
           })

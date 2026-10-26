@@ -18,10 +18,21 @@ const official: OutcomeSource = { type: "official", name: "Publisher", url: "htt
 function cardOutcome(id: string, p: string | null, c: CardRef, source = community): OutcomeInput {
   return { id, label: id, kind: "card", probability: p, card: c, source };
 }
-function poolOutcome(id: string, p: string | null, pool: CardRef[], source = community, isRemainder = false): OutcomeInput {
+function poolOutcome(
+  id: string,
+  p: string | null,
+  pool: CardRef[],
+  source = community,
+  isRemainder = false,
+): OutcomeInput {
   return { id, label: id, kind: "rarity_pool", probability: p, pool, source, isRemainder };
 }
-function slot(id: string, occurrences: string | number, outcomes: OutcomeInput[], kind: SlotInput["kind"] = "random"): SlotInput {
+function slot(
+  id: string,
+  occurrences: string | number,
+  outcomes: OutcomeInput[],
+  kind: SlotInput["kind"] = "random",
+): SlotInput {
   return { id, name: id, kind, occurrences, outcomes };
 }
 const model = (slots: SlotInput[]): PullModelInput => ({ currency: "USD", slots });
@@ -198,7 +209,12 @@ describe("calculateEv", () => {
 
   it("ignores prices in another currency instead of mixing them", () => {
     const r = calculateEv(
-      model([slot("s", 1, [cardOutcome("a", "0.5", card("a", "10")), cardOutcome("b", "0.5", card("b", "10", FRESH, "EUR"))])]),
+      model([
+        slot("s", 1, [
+          cardOutcome("a", "0.5", card("a", "10")),
+          cardOutcome("b", "0.5", card("b", "10", FRESH, "EUR")),
+        ]),
+      ]),
       { now: NOW },
     );
     expect(r.grossEv?.toString()).toBe("5");
@@ -209,8 +225,14 @@ describe("calculateEv", () => {
     const pikachu = card("pika", "100");
     const r = calculateEv(
       model([
-        slot("rev1", 10, [cardOutcome("p1", "0.01", pikachu), poolOutcome("r1", null, [card("x", "0")], community, true)]),
-        slot("rev2", 10, [cardOutcome("p2", "0.01", pikachu), poolOutcome("r2", null, [card("y", "0")], community, true)]),
+        slot("rev1", 10, [
+          cardOutcome("p1", "0.01", pikachu),
+          poolOutcome("r1", null, [card("x", "0")], community, true),
+        ]),
+        slot("rev2", 10, [
+          cardOutcome("p2", "0.01", pikachu),
+          poolOutcome("r2", null, [card("y", "0")], community, true),
+        ]),
       ]),
       { now: NOW },
     );
@@ -265,7 +287,9 @@ describe("calculateEv", () => {
   it("uses pool-uniform per-card odds for top-hit display", () => {
     const pool = [card("a", "100"), card("b", "10")];
     const r = calculateEv(
-      model([slot("s", 36, [poolOutcome("sir", "0.02", pool), poolOutcome("rest", null, [card("x", "0")], community, true)])]),
+      model([
+        slot("s", 36, [poolOutcome("sir", "0.02", pool), poolOutcome("rest", null, [card("x", "0")], community, true)]),
+      ]),
       { now: NOW },
     );
     const a = r.cards.find((c) => c.card.id === "a")!;

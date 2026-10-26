@@ -17,7 +17,7 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
 }
 
 export function Label({ className, ...props }: ComponentProps<"label">) {
-  return <label className={cn("text-xs font-medium text-muted", className)} {...props} />;
+  return <label className={cn("text-muted text-xs font-medium", className)} {...props} />;
 }
 
 export function Field({
@@ -40,11 +40,11 @@ export function Field({
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {error ? (
-        <p className="text-xs text-loss" role="alert">
+        <p className="text-loss text-xs" role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p className="text-xs text-subtle">{hint}</p>
+        <p className="text-subtle text-xs">{hint}</p>
       ) : null}
     </div>
   );

@@ -27,7 +27,9 @@ let db: Client;
 async function as<T>(role: "anon" | "authenticated", userId: string | null, fn: () => Promise<T>): Promise<T> {
   await db.query("begin");
   try {
-    await db.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify(userId ? { sub: userId } : {})]);
+    await db.query(`select set_config('request.jwt.claims', $1, true)`, [
+      JSON.stringify(userId ? { sub: userId } : {}),
+    ]);
     await db.query(`set local role ${role}`);
     return await fn();
   } finally {
@@ -47,16 +49,21 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
     url.pathname = `/${DB_NAME}`;
     db = new Client({ connectionString: url.toString() });
     await db.connect();
-    for (const f of ["tests/db/supabase-shim.sql", "supabase/migrations/20261026000000_init.sql", "supabase/seed.sql"]) {
+    for (const f of [
+      "tests/db/supabase-shim.sql",
+      "supabase/migrations/20261026000000_init.sql",
+      "supabase/seed.sql",
+    ]) {
       await db.query(readFileSync(join(root, f), "utf8"));
     }
-    await db.query(`insert into auth.users (id, email) values ($1, 'alice@test'), ($2, 'bob@test'), ($3, 'admin@test')`, [
-      ALICE,
-      BOB,
-      ADMIN,
-    ]);
+    await db.query(
+      `insert into auth.users (id, email) values ($1, 'alice@test'), ($2, 'bob@test'), ($3, 'admin@test')`,
+      [ALICE, BOB, ADMIN],
+    );
     await db.query(`update public.profiles set is_admin = true where id = $1`, [ADMIN]);
-    const { rows } = await db.query(`select id from public.sealed_products where slug = 'pokemon-surging-sparks-booster-box'`);
+    const { rows } = await db.query(
+      `select id from public.sealed_products where slug = 'pokemon-surging-sparks-booster-box'`,
+    );
     await db.query(
       `insert into public.collection_sealed_positions (user_id, sealed_product_id, quantity, purchase_price_per_unit)
        values ($1, $2, 1, 150), ($3, $2, 2, 140)`,
@@ -78,26 +85,38 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
   });
 
   it("lets a user see only their own collection", async () => {
-    const rows = await as("authenticated", ALICE, async () =>
-      (await db.query(`select user_id from public.collection_sealed_positions`)).rows,
+    const rows = await as(
+      "authenticated",
+      ALICE,
+      async () => (await db.query(`select user_id from public.collection_sealed_positions`)).rows,
     );
     expect(rows).toEqual([{ user_id: ALICE }]);
-    const cards = await as("authenticated", BOB, async () =>
-      (await db.query(`select * from public.collection_card_positions`)).rows,
+    const cards = await as(
+      "authenticated",
+      BOB,
+      async () => (await db.query(`select * from public.collection_card_positions`)).rows,
     );
     expect(cards).toHaveLength(0);
   });
 
   it("prevents updating or deleting another user's lots", async () => {
-    const updated = await as("authenticated", ALICE, async () =>
-      (await db.query(`update public.collection_sealed_positions set quantity = 99 where user_id = $1`, [BOB])).rowCount,
+    const updated = await as(
+      "authenticated",
+      ALICE,
+      async () =>
+        (await db.query(`update public.collection_sealed_positions set quantity = 99 where user_id = $1`, [BOB]))
+          .rowCount,
     );
     expect(updated).toBe(0);
-    const deleted = await as("authenticated", ALICE, async () =>
-      (await db.query(`delete from public.collection_sealed_positions where user_id = $1`, [BOB])).rowCount,
+    const deleted = await as(
+      "authenticated",
+      ALICE,
+      async () => (await db.query(`delete from public.collection_sealed_positions where user_id = $1`, [BOB])).rowCount,
     );
     expect(deleted).toBe(0);
-    const { rows } = await db.query(`select quantity from public.collection_sealed_positions where user_id = $1`, [BOB]);
+    const { rows } = await db.query(`select quantity from public.collection_sealed_positions where user_id = $1`, [
+      BOB,
+    ]);
     expect(rows[0].quantity).toBe(2);
   });
 
@@ -121,19 +140,28 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
     await expect(as("anon", null, () => db.query(`select * from public.collection_sealed_positions`))).rejects.toThrow(
       /permission denied/,
     );
-    await expect(as("anon", null, () => db.query(`select * from public.profiles`))).rejects.toThrow(/permission denied/);
+    await expect(as("anon", null, () => db.query(`select * from public.profiles`))).rejects.toThrow(
+      /permission denied/,
+    );
     const products = await as("anon", null, async () => (await db.query(`select id from public.sealed_products`)).rows);
     expect(products.length).toBe(5);
   });
 
   it("only lets a user read their own profile and not grant themselves admin", async () => {
-    const profiles = await as("authenticated", ALICE, async () => (await db.query(`select id from public.profiles`)).rows);
+    const profiles = await as(
+      "authenticated",
+      ALICE,
+      async () => (await db.query(`select id from public.profiles`)).rows,
+    );
     expect(profiles).toEqual([{ id: ALICE }]);
     await expect(
       as("authenticated", ALICE, () => db.query(`update public.profiles set is_admin = true where id = $1`, [ALICE])),
     ).rejects.toThrow(/permission denied/);
-    const ok = await as("authenticated", ALICE, async () =>
-      (await db.query(`update public.profiles set default_currency = 'EUR' where id = $1`, [ALICE])).rowCount,
+    const ok = await as(
+      "authenticated",
+      ALICE,
+      async () =>
+        (await db.query(`update public.profiles set default_currency = 'EUR' where id = $1`, [ALICE])).rowCount,
     );
     expect(ok).toBe(1);
   });

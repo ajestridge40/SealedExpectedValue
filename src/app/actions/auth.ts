@@ -10,6 +10,8 @@ import { createClient } from "@/lib/supabase/server";
 export interface FormState {
   error?: string;
   message?: string;
+  /** Email echoed back so a failed sign-in/sign-up keeps it in the field. */
+  email?: string;
 }
 
 const email = z.string().trim().toLowerCase().email("Enter a valid email address.").max(254);
@@ -29,10 +31,11 @@ export async function signIn(_: FormState, formData: FormData): Promise<FormStat
     email: formData.get("email"),
     password: formData.get("password"),
   });
-  if (!parsed.success) return { error: "Enter your email and password." };
+  if (!parsed.success) return { error: "Enter your email and password.", email: String(formData.get("email") ?? "") };
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) return { error: "Incorrect email or password, or the email is not confirmed yet." };
+  if (error)
+    return { error: "Incorrect email or password, or the email is not confirmed yet.", email: parsed.data.email };
   redirect(safeNext(formData.get("next")));
 }
 
@@ -41,13 +44,13 @@ export async function signUp(_: FormState, formData: FormData): Promise<FormStat
     email: formData.get("email"),
     password: formData.get("password"),
   });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!parsed.success) return { error: parsed.error.issues[0].message, email: String(formData.get("email") ?? "") };
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     ...parsed.data,
     options: { emailRedirectTo: `${await siteUrl()}/auth/callback?next=/` },
   });
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, email: parsed.data.email };
   if (data.session) redirect("/");
   return { message: "Check your inbox to confirm your email address, then sign in." };
 }
@@ -56,7 +59,9 @@ export async function signInWithGoogle(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${await siteUrl()}/auth/callback?next=${encodeURIComponent(safeNext(formData.get("next")))}` },
+    options: {
+      redirectTo: `${await siteUrl()}/auth/callback?next=${encodeURIComponent(safeNext(formData.get("next")))}`,
+    },
   });
   if (error || !data.url) redirect("/login?error=oauth");
   redirect(data.url);

@@ -13,7 +13,13 @@ const GROUPS = {
   success: true,
   errors: [],
   results: [
-    { groupId: 9001, name: "SV08: Test Sparks", abbreviation: "SV08", publishedOn: "2024-11-08T00:00:00", categoryId: 3 },
+    {
+      groupId: 9001,
+      name: "SV08: Test Sparks",
+      abbreviation: "SV08",
+      publishedOn: "2024-11-08T00:00:00",
+      categoryId: 3,
+    },
     { groupId: 9002, name: "SV08: Test Sparks Promos", abbreviation: null, publishedOn: null, categoryId: 3 },
   ],
 };
@@ -21,8 +27,24 @@ const PRODUCTS = {
   success: true,
   errors: [],
   results: [
-    { productId: 1, name: "Test Sparks Booster Box", imageUrl: "https://tcgplayer-cdn.tcgplayer.com/product/1_200w.jpg", categoryId: 3, groupId: 9001, url: null, extendedData: [] },
-    { productId: 2, name: "Test Sparks Booster Box Case", imageUrl: null, categoryId: 3, groupId: 9001, url: null, extendedData: [] },
+    {
+      productId: 1,
+      name: "Test Sparks Booster Box",
+      imageUrl: "https://tcgplayer-cdn.tcgplayer.com/product/1_200w.jpg",
+      categoryId: 3,
+      groupId: 9001,
+      url: null,
+      extendedData: [],
+    },
+    {
+      productId: 2,
+      name: "Test Sparks Booster Box Case",
+      imageUrl: null,
+      categoryId: 3,
+      groupId: 9001,
+      url: null,
+      extendedData: [],
+    },
     {
       productId: 3,
       name: "Testachu ex - 238/191",
@@ -43,7 +65,14 @@ const PRICES = {
   results: [
     { productId: 1, lowPrice: 1, midPrice: 2, highPrice: 3, marketPrice: 2.5, subTypeName: "Normal" },
     { productId: 3, lowPrice: 1, midPrice: 2, highPrice: 3, marketPrice: 9.99, subTypeName: "Holofoil" },
-    { productId: 3, lowPrice: null, midPrice: null, highPrice: null, marketPrice: null, subTypeName: "Reverse Holofoil" },
+    {
+      productId: 3,
+      lowPrice: null,
+      midPrice: null,
+      highPrice: null,
+      marketPrice: null,
+      subTypeName: "Reverse Holofoil",
+    },
   ],
 };
 
@@ -75,7 +104,11 @@ describe("TcgcsvProvider", () => {
     expect(sealed.map((s) => s.externalId)).toEqual(["3:9001:1", "3:9001:2"]);
 
     const cards = await p.searchCards({ game: "pokemon", setExternalId: "3:9001", text: "testachu" });
-    expect(cards[0]).toMatchObject({ name: "Testachu ex", number: "238/191", printings: ["Holofoil", "Reverse Holofoil"] });
+    expect(cards[0]).toMatchObject({
+      name: "Testachu ex",
+      number: "238/191",
+      printings: ["Holofoil", "Reverse Holofoil"],
+    });
 
     const price = await p.getCurrentProductPrice("3:9001:1");
     expect(price).toMatchObject({ market: 2.5, currency: "USD" });
@@ -111,8 +144,15 @@ describe("PokemonTcgProvider", () => {
       number: "1",
       rarity: "Rare",
       set: { id: "test1", name: "Test" },
-      images: { small: "https://images.pokemontcg.io/test1/1.png", large: "https://images.pokemontcg.io/test1/1_hires.png" },
-      tcgplayer: { url: null, updatedAt: "2026/10/24", prices: { holofoil: { market: 3.21 }, reverseHolofoil: { market: 1.5 } } },
+      images: {
+        small: "https://images.pokemontcg.io/test1/1.png",
+        large: "https://images.pokemontcg.io/test1/1_hires.png",
+      },
+      tcgplayer: {
+        url: null,
+        updatedAt: "2026/10/24",
+        prices: { holofoil: { market: 3.21 }, reverseHolofoil: { market: 1.5 } },
+      },
     };
     const p = new PokemonTcgProvider(undefined, mockFetch({ "/cards/test1-1": { data: card } }));
     const prices = await p.getCurrentCardPrice("test1-1");
@@ -138,7 +178,9 @@ describe("fetchJson", () => {
   it("retries once on a 5xx response", async () => {
     let n = 0;
     const f = vi.fn(async () => (++n === 1 ? new Response("x", { status: 503 }) : Response.json({ ok: 1 })));
-    await expect(fetchJson("https://tcgcsv.com/retry", { fetchImpl: f as unknown as typeof fetch, minIntervalMs: 0 })).resolves.toEqual({ ok: 1 });
+    await expect(
+      fetchJson("https://tcgcsv.com/retry", { fetchImpl: f as unknown as typeof fetch, minIntervalMs: 0 }),
+    ).resolves.toEqual({ ok: 1 });
     expect(f).toHaveBeenCalledTimes(2);
   }, 10_000);
 });
@@ -169,12 +211,42 @@ describe("planSnapshots", () => {
   it("maps provider prices onto tracked products and card printings", () => {
     const capturedAt = new Date("2026-10-26T21:00:00Z");
     const prices = [
-      { externalId: "3:9001:1", printing: "Normal", currency: "USD", market: 2.5, low: 1, mid: 2, high: 3, asOf: new Date("2026-10-26T20:00:00Z") },
-      { externalId: "3:9001:3", printing: "Holofoil", currency: "USD", market: 9.99, low: null, mid: null, high: null, asOf: null },
-      { externalId: "3:9001:3", printing: "Reverse Holofoil", currency: "USD", market: null, low: null, mid: null, high: null, asOf: null },
+      {
+        externalId: "3:9001:1",
+        printing: "Normal",
+        currency: "USD",
+        market: 2.5,
+        low: 1,
+        mid: 2,
+        high: 3,
+        asOf: new Date("2026-10-26T20:00:00Z"),
+      },
+      {
+        externalId: "3:9001:3",
+        printing: "Holofoil",
+        currency: "USD",
+        market: 9.99,
+        low: null,
+        mid: null,
+        high: null,
+        asOf: null,
+      },
+      {
+        externalId: "3:9001:3",
+        printing: "Reverse Holofoil",
+        currency: "USD",
+        market: null,
+        low: null,
+        mid: null,
+        high: null,
+        asOf: null,
+      },
     ];
     const plan = planSnapshots({
-      products: [{ id: "p1", tcgplayer_product_id: 1 }, { id: "p2", tcgplayer_product_id: null }],
+      products: [
+        { id: "p1", tcgplayer_product_id: 1 },
+        { id: "p2", tcgplayer_product_id: null },
+      ],
       cards: [
         { id: "c1", tcgplayer_product_id: 3, printing: "Holofoil" },
         { id: "c2", tcgplayer_product_id: 3, printing: "Reverse Holofoil" },
@@ -196,13 +268,21 @@ describe("planSnapshots", () => {
 
 describe("CSV", () => {
   it("neutralizes formula injection in exported text", () => {
-    expect(escapeCsvCell("=HYPERLINK(\"http://x\")")).toBe("\"'=HYPERLINK(\"\"http://x\"\")\"");
+    expect(escapeCsvCell('=HYPERLINK("http://x")')).toBe('"\'=HYPERLINK(""http://x"")"');
     expect(escapeCsvCell("@SUM(A1)")).toBe("'@SUM(A1)");
     expect(escapeCsvCell(-5)).toBe("-5");
+    expect(escapeCsvCell("-7.00")).toBe("-7.00");
+    expect(escapeCsvCell("-1+1")).toBe("'-1+1");
     expect(escapeCsvCell("a,b")).toBe('"a,b"');
-    expect(toCsv([{ a: "x", b: 1 }], [{ header: "A", value: (r) => r.a }, { header: "B", value: (r) => r.b }])).toBe(
-      "A,B\r\nx,1\r\n",
-    );
+    expect(
+      toCsv(
+        [{ a: "x", b: 1 }],
+        [
+          { header: "A", value: (r) => r.a },
+          { header: "B", value: (r) => r.b },
+        ],
+      ),
+    ).toBe("A,B\r\nx,1\r\n");
   });
 
   it("validates price CSV uploads row by row", () => {
@@ -217,7 +297,12 @@ describe("CSV", () => {
     ].join("\n");
     const { rows, errors } = parsePriceCsv(csv);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ item_type: "sealed", tcgplayer_product_id: 123, currency: "USD", printing: "Normal" });
+    expect(rows[0]).toMatchObject({
+      item_type: "sealed",
+      tcgplayer_product_id: 123,
+      currency: "USD",
+      printing: "Normal",
+    });
     expect(errors.map((e) => e.line)).toEqual([4, 5, 6, 7]);
   });
 

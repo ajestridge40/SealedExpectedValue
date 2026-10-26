@@ -8,10 +8,17 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const supabase = await createClient();
   const [profile, sealed, cards, watchlist] = await Promise.all([
-    supabase.from("profiles").select("display_name, default_currency, preferred_game_id, price_stale_after_hours, created_at").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("display_name, default_currency, preferred_game_id, price_stale_after_hours, created_at")
+      .eq("id", user.id)
+      .maybeSingle(),
     supabase.from("collection_sealed_positions").select("*, sealed_products(name, slug)").limit(10000),
     supabase.from("collection_card_positions").select("*, cards(name, number, printing, rarity)").limit(10000),
-    supabase.from("watchlist_items").select("*, sealed_products(name, slug), cards(name, number, printing)").limit(10000),
+    supabase
+      .from("watchlist_items")
+      .select("*, sealed_products(name, slug), cards(name, number, printing)")
+      .limit(10000),
   ]);
   const body = {
     exported_at: new Date().toISOString(),

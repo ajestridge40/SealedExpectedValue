@@ -45,40 +45,67 @@ export function LotForm({
   const [state, action, pending] = useActionState<LotFormState, FormData>(saveLot.bind(null, type), {});
   const e = state.fieldErrors ?? {};
   const s = (v: unknown) => (v === null || v === undefined ? undefined : String(v));
+  // After a failed submission, show what the user typed rather than the original defaults.
+  const v = (key: keyof LotDefaults, fallback?: string) => state.values?.[key] ?? s(defaults[key]) ?? fallback;
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <form action={action} className="flex flex-col gap-5" noValidate>
+    <form key={state.attempt ?? 0} action={action} className="flex flex-col gap-5" noValidate>
       {defaults.id ? <input type="hidden" name="id" value={defaults.id} /> : null}
       {defaults.item_id ? <input type="hidden" name="item_id" value={defaults.item_id} /> : null}
 
       {itemLabel ? (
-        <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
-          <span className="text-muted">{type === "sealed" ? "Product" : "Card"}:</span> <span className="font-medium">{itemLabel}</span>
+        <div className="bg-surface-2 rounded-lg px-3 py-2 text-sm">
+          <span className="text-muted">{type === "sealed" ? "Product" : "Card"}:</span>{" "}
+          <span className="font-medium">{itemLabel}</span>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Item name" htmlFor="custom_name" error={e.custom_name} hint="Custom entry, not linked to the catalog.">
-            <Input id="custom_name" name="custom_name" defaultValue={s(defaults.custom_name)} required maxLength={200} />
+          <Field
+            label="Item name"
+            htmlFor="custom_name"
+            error={e.custom_name}
+            hint="Custom entry, not linked to the catalog."
+          >
+            <Input id="custom_name" name="custom_name" defaultValue={v("custom_name")} required maxLength={200} />
           </Field>
           <Field label="Set (optional)" htmlFor="custom_set_name">
-            <Input id="custom_set_name" name="custom_set_name" defaultValue={s(defaults.custom_set_name)} maxLength={200} />
+            <Input id="custom_set_name" name="custom_set_name" defaultValue={v("custom_set_name")} maxLength={200} />
           </Field>
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-4">
         <Field label="Quantity" htmlFor="quantity" error={e.quantity}>
-          <Input id="quantity" name="quantity" type="number" min={1} step={1} defaultValue={defaults.quantity ?? 1} required />
+          <Input
+            id="quantity"
+            name="quantity"
+            type="number"
+            min={1}
+            step={1}
+            defaultValue={v("quantity", "1")}
+            required
+          />
         </Field>
-        <Field label={type === "sealed" ? "Price per unit" : "Price per copy"} htmlFor="purchase_price_per_unit" error={e.purchase_price_per_unit}>
-          <Input id="purchase_price_per_unit" name="purchase_price_per_unit" inputMode="decimal" defaultValue={s(defaults.purchase_price_per_unit)} placeholder="0.00" required />
+        <Field
+          label={type === "sealed" ? "Price per unit" : "Price per copy"}
+          htmlFor="purchase_price_per_unit"
+          error={e.purchase_price_per_unit}
+        >
+          <Input
+            id="purchase_price_per_unit"
+            name="purchase_price_per_unit"
+            inputMode="decimal"
+            defaultValue={v("purchase_price_per_unit")}
+            placeholder="0.00"
+            required
+          />
         </Field>
         <Field label="Currency" htmlFor="currency" error={e.currency}>
-          <Input id="currency" name="currency" defaultValue={defaults.currency ?? "USD"} maxLength={3} />
+          <Input id="currency" name="currency" defaultValue={v("currency", "USD")} maxLength={3} />
         </Field>
         <Field label="Purchase date" htmlFor="purchase_date" error={e.purchase_date}>
-          <Input id="purchase_date" name="purchase_date" type="date" max={today} defaultValue={s(defaults.purchase_date)} />
+          <Input id="purchase_date" name="purchase_date" type="date" max={today} defaultValue={v("purchase_date")} />
         </Field>
       </div>
 
@@ -86,15 +113,26 @@ export function LotForm({
         <>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Fees (total for this lot)" htmlFor="fees" error={e.fees} hint="Added to cost basis.">
-              <Input id="fees" name="fees" inputMode="decimal" defaultValue={s(defaults.fees) ?? "0"} />
+              <Input id="fees" name="fees" inputMode="decimal" defaultValue={v("fees", "0")} />
             </Field>
-            <Field label="Shipping (total for this lot)" htmlFor="shipping" error={e.shipping} hint="Added to cost basis.">
-              <Input id="shipping" name="shipping" inputMode="decimal" defaultValue={s(defaults.shipping) ?? "0"} />
+            <Field
+              label="Shipping (total for this lot)"
+              htmlFor="shipping"
+              error={e.shipping}
+              hint="Added to cost basis."
+            >
+              <Input id="shipping" name="shipping" inputMode="decimal" defaultValue={v("shipping", "0")} />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Condition (optional)" htmlFor="condition">
-              <Input id="condition" name="condition" list="sealed-conditions" defaultValue={s(defaults.condition)} maxLength={60} />
+              <Input
+                id="condition"
+                name="condition"
+                list="sealed-conditions"
+                defaultValue={v("condition")}
+                maxLength={60}
+              />
               <datalist id="sealed-conditions">
                 <option value="Factory sealed" />
                 <option value="Sealed, minor box wear" />
@@ -102,7 +140,12 @@ export function LotForm({
               </datalist>
             </Field>
             <Field label="Storage location (optional)" htmlFor="storage_location">
-              <Input id="storage_location" name="storage_location" defaultValue={s(defaults.storage_location)} maxLength={200} />
+              <Input
+                id="storage_location"
+                name="storage_location"
+                defaultValue={v("storage_location")}
+                maxLength={200}
+              />
             </Field>
           </div>
         </>
@@ -110,32 +153,47 @@ export function LotForm({
         <>
           <div className="grid gap-4 sm:grid-cols-4">
             <Field label="Condition" htmlFor="condition">
-              <Select id="condition" name="condition" defaultValue={defaults.condition ?? "Near Mint"}>
+              <Select id="condition" name="condition" defaultValue={v("condition", "Near Mint")}>
                 {CARD_CONDITIONS.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </Select>
             </Field>
             <Field label="Language" htmlFor="language">
-              <Input id="language" name="language" defaultValue={defaults.language ?? "English"} maxLength={40} />
+              <Input id="language" name="language" defaultValue={v("language", "English")} maxLength={40} />
             </Field>
             <Field label="Grading company" htmlFor="grading_company">
-              <Select id="grading_company" name="grading_company" defaultValue={defaults.grading_company ?? "None"}>
+              <Select id="grading_company" name="grading_company" defaultValue={v("grading_company", "None")}>
                 {GRADERS.map((g) => (
                   <option key={g}>{g}</option>
                 ))}
               </Select>
             </Field>
             <Field label="Grade" htmlFor="grade" error={e.grade}>
-              <Input id="grade" name="grade" defaultValue={s(defaults.grade)} maxLength={20} placeholder="e.g. 10" />
+              <Input id="grade" name="grade" defaultValue={v("grade")} maxLength={20} placeholder="e.g. 10" />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Grading fees (total)" htmlFor="grading_fees" error={e.grading_fees} hint="Added to cost basis.">
-              <Input id="grading_fees" name="grading_fees" inputMode="decimal" defaultValue={s(defaults.grading_fees) ?? "0"} />
+            <Field
+              label="Grading fees (total)"
+              htmlFor="grading_fees"
+              error={e.grading_fees}
+              hint="Added to cost basis."
+            >
+              <Input id="grading_fees" name="grading_fees" inputMode="decimal" defaultValue={v("grading_fees", "0")} />
             </Field>
-            <Field label="Acquisition fees and shipping (total)" htmlFor="acquisition_fees" error={e.acquisition_fees} hint="Added to cost basis.">
-              <Input id="acquisition_fees" name="acquisition_fees" inputMode="decimal" defaultValue={s(defaults.acquisition_fees) ?? "0"} />
+            <Field
+              label="Acquisition fees and shipping (total)"
+              htmlFor="acquisition_fees"
+              error={e.acquisition_fees}
+              hint="Added to cost basis."
+            >
+              <Input
+                id="acquisition_fees"
+                name="acquisition_fees"
+                inputMode="decimal"
+                defaultValue={v("acquisition_fees", "0")}
+              />
             </Field>
           </div>
         </>
@@ -151,10 +209,16 @@ export function LotForm({
             : "Custom items have no market price; enter one to include this lot in your collection value."
         }
       >
-        <Input id="manual_unit_value" name="manual_unit_value" inputMode="decimal" defaultValue={s(defaults.manual_unit_value)} placeholder="Leave blank to use the market price" />
+        <Input
+          id="manual_unit_value"
+          name="manual_unit_value"
+          inputMode="decimal"
+          defaultValue={v("manual_unit_value")}
+          placeholder="Leave blank to use the market price"
+        />
       </Field>
       <Field label="Notes (optional)" htmlFor="notes">
-        <Textarea id="notes" name="notes" defaultValue={s(defaults.notes)} maxLength={2000} />
+        <Textarea id="notes" name="notes" defaultValue={v("notes")} maxLength={2000} />
       </Field>
 
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}

@@ -25,25 +25,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-full flex-col">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-fg"
+          className="focus:bg-accent focus:text-accent-fg sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:px-3 focus:py-2"
         >
           Skip to content
         </a>
         {configured ? <SiteHeader /> : null}
-        <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-8">
+        <main id="main" className="mx-auto w-full max-w-7xl min-w-0 flex-1 px-4 py-6 sm:py-8">
           {configured ? children : <SetupRequired />}
         </main>
-        <footer className="border-t border-border">
-          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-6 text-xs text-subtle">
+        <footer className="border-border border-t">
+          <div className="text-subtle mx-auto flex max-w-7xl flex-col gap-2 px-4 py-6 text-xs">
             <p>{DISCLAIMER}</p>
             <p>
               Prices: TCGplayer market prices via{" "}
-              <a className="underline hover:text-muted" href="https://tcgcsv.com" rel="noreferrer">
+              <a className="hover:text-muted underline" href="https://tcgcsv.com" rel="noreferrer">
                 TCGCSV
               </a>{" "}
               unless marked as imported or manual. Pull rates are community estimates unless labelled official. Not
               affiliated with TCGplayer, The Pokémon Company, Wizards of the Coast or Konami.{" "}
-              <Link className="underline hover:text-muted" href="/methodology">
+              <Link className="hover:text-muted underline" href="/methodology">
                 Methodology
               </Link>
             </p>

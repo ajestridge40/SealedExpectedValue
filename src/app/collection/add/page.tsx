@@ -13,7 +13,11 @@ import { param } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Add to collection" };
 
-export default async function AddLotPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function AddLotPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireUser("/collection/add");
   const sp = await searchParams;
   const type = param(sp, "type") === "card" ? "card" : "sealed";
@@ -48,7 +52,10 @@ export default async function AddLotPage({ searchParams }: { searchParams: Promi
     }
     return (
       <>
-        <PageHeader title={`Add a ${type === "sealed" ? "sealed product" : "card"} lot`} description="One lot = one purchase. Add separate lots for purchases at different prices or dates." />
+        <PageHeader
+          title={`Add a ${type === "sealed" ? "sealed product" : "card"} lot`}
+          description="One lot = one purchase. Add separate lots for purchases at different prices or dates."
+        />
         <Card className="max-w-3xl">
           <CardContent className="pt-5 sm:pt-5">
             <LotForm type={type} itemLabel={label} defaults={{ item_id: item ?? null, currency }} />
@@ -70,15 +77,21 @@ export default async function AddLotPage({ searchParams }: { searchParams: Promi
               <input type="hidden" name="type" value="sealed" />
               <Field label="Product" htmlFor="item">
                 <Select id="item" name="item" required defaultValue="">
-                  <option value="" disabled>Choose a product…</option>
+                  <option value="" disabled>
+                    Choose a product…
+                  </option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
                   ))}
                 </Select>
               </Field>
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" variant="primary">Continue</Button>
-                <Link href="/collection/add?type=sealed&custom=1" className="text-sm text-accent hover:underline">
+                <Button type="submit" variant="primary">
+                  Continue
+                </Button>
+                <Link href="/collection/add?type=sealed&custom=1" className="text-accent text-sm hover:underline">
                   Not listed? Add a custom item
                 </Link>
               </div>
@@ -104,24 +117,30 @@ export default async function AddLotPage({ searchParams }: { searchParams: Promi
             </Field>
             <Button type="submit">Search</Button>
           </form>
-          {q && results.length === 0 ? <p className="text-sm text-muted">No cards found for “{q}”.</p> : null}
+          {q && results.length === 0 ? <p className="text-muted text-sm">No cards found for “{q}”.</p> : null}
           {results.length ? (
-            <ul className="divide-y divide-border rounded-lg border border-border">
+            <ul className="divide-border border-border divide-y rounded-lg border">
               {results.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                   <div>
-                    <div className="font-medium">{c.name} <span className="text-xs text-muted">{c.number}</span></div>
-                    <div className="text-xs text-muted">{c.rarity} · {c.printing}</div>
+                    <div className="font-medium">
+                      {c.name} <span className="text-muted text-xs">{c.number}</span>
+                    </div>
+                    <div className="text-muted text-xs">
+                      {c.rarity} · {c.printing}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <Money value={c.current_price} currency={c.current_price_currency ?? "USD"} />
-                    <Button asChild size="sm"><Link href={`/collection/add?type=card&item=${c.id}`}>Select</Link></Button>
+                    <Button asChild size="sm">
+                      <Link href={`/collection/add?type=card&item=${c.id}`}>Select</Link>
+                    </Button>
                   </div>
                 </li>
               ))}
             </ul>
           ) : null}
-          <Link href="/collection/add?type=card&custom=1" className="text-sm text-accent hover:underline">
+          <Link href="/collection/add?type=card&custom=1" className="text-accent text-sm hover:underline">
             Not listed? Add a custom card
           </Link>
         </CardContent>

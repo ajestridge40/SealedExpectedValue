@@ -24,7 +24,10 @@ export default async function ComparePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const raw = [sp.ids].flat().filter(Boolean).flatMap((v) => String(v).split(","));
+  const raw = [sp.ids]
+    .flat()
+    .filter(Boolean)
+    .flatMap((v) => String(v).split(","));
   const ids = [...new Set(raw.filter((v) => /^[0-9a-f-]{36}$/i.test(v)))].slice(0, MAX);
   const [all, stale] = await Promise.all([getProductSummaries(), staleAfterHours()]);
   const selected = ids.map((id) => all.find((p) => p.id === id)).filter((p) => p !== undefined);
@@ -36,7 +39,15 @@ export default async function ComparePage({
     { label: "Packs", render: (p) => p.packCount ?? "—" },
     { label: "Released", render: (p) => formatDate(p.releaseDate) },
     { label: "Market price", render: (p) => <Money value={p.price} currency={p.currency} /> },
-    { label: "Price per pack", render: (p) => (p.price && p.packCount ? <Money value={(Number(p.price) / p.packCount).toFixed(2)} currency={p.currency} /> : "—") },
+    {
+      label: "Price per pack",
+      render: (p) =>
+        p.price && p.packCount ? (
+          <Money value={(Number(p.price) / p.packCount).toFixed(2)} currency={p.currency} />
+        ) : (
+          "—"
+        ),
+    },
     { label: "Est. gross EV", render: (p) => (p.ev ? <Money value={p.ev} currency={p.currency} /> : "—") },
     { label: "EV / price", render: (p) => <span className="tabular">{formatRatio(p.ratio)}</span> },
     { label: "Est. net return", render: (p) => <Money value={p.net} currency={p.currency} signed /> },
@@ -70,7 +81,7 @@ export default async function ComparePage({
         {ids.map((id) => (
           <input key={id} type="hidden" name="ids" value={id} />
         ))}
-        <label className="flex flex-col gap-1.5 text-xs text-muted" htmlFor="add">
+        <label className="text-muted flex flex-col gap-1.5 text-xs" htmlFor="add">
           Add a product
           <Select id="add" name="ids" className="w-72" defaultValue="" disabled={ids.length >= MAX}>
             <option value="" disabled>
@@ -94,12 +105,20 @@ export default async function ComparePage({
       </form>
 
       {selected.length === 0 ? (
-        <EmptyState icon={GitCompareArrows} title="Pick products to compare" action={<Button asChild variant="primary"><Link href="/products">Browse products</Link></Button>}>
+        <EmptyState
+          icon={GitCompareArrows}
+          title="Pick products to compare"
+          action={
+            <Button asChild variant="primary">
+              <Link href="/products">Browse products</Link>
+            </Button>
+          }
+        >
           Select products with the “Compare” checkbox in the explorer, or add them above.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+          <div className="border-border bg-surface overflow-x-auto rounded-xl border">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr>
@@ -107,13 +126,16 @@ export default async function ComparePage({
                   {selected.map((p) => (
                     <th key={p.id} className="p-3 text-left align-top font-normal">
                       <CatalogImage src={p.imageUrl} alt={p.name} aspect="square" className="mb-2 h-28 w-28" />
-                      <Link href={`/products/${p.slug}`} className="font-medium hover:text-accent">
+                      <Link href={`/products/${p.slug}`} className="hover:text-accent font-medium">
                         {p.name}
                       </Link>
                       <div className="mt-1">
                         <Link
-                          className="text-xs text-muted hover:text-loss"
-                          href={`/compare?${ids.filter((x) => x !== p.id).map((x) => `ids=${x}`).join("&")}`}
+                          className="text-muted hover:text-loss text-xs"
+                          href={`/compare?${ids
+                            .filter((x) => x !== p.id)
+                            .map((x) => `ids=${x}`)
+                            .join("&")}`}
                         >
                           Remove
                         </Link>
@@ -124,12 +146,12 @@ export default async function ComparePage({
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.label} className="border-t border-border/60">
-                    <th scope="row" className="p-3 text-left text-xs font-medium text-muted">
+                  <tr key={r.label} className="border-border/60 border-t">
+                    <th scope="row" className="text-muted p-3 text-left text-xs font-medium">
                       {r.label}
                     </th>
                     {selected.map((p) => (
-                      <td key={p.id} className="p-3 tabular">
+                      <td key={p.id} className="tabular p-3">
                         {r.render(p)}
                       </td>
                     ))}
@@ -138,7 +160,15 @@ export default async function ComparePage({
               </tbody>
             </table>
           </div>
-          <CompareScenario products={selected.map((p) => ({ id: p.id, name: p.name, ev: p.evStatus === "insufficient" || p.evStatus === "no_model" ? null : p.ev, price: p.price, currency: p.currency }))} />
+          <CompareScenario
+            products={selected.map((p) => ({
+              id: p.id,
+              name: p.name,
+              ev: p.evStatus === "insufficient" || p.evStatus === "no_model" ? null : p.ev,
+              price: p.price,
+              currency: p.currency,
+            }))}
+          />
         </div>
       )}
     </>

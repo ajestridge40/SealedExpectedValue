@@ -20,14 +20,20 @@ export async function GET() {
     {
       header: "fees_and_shipping",
       value: (e) =>
-        m(e.valuation.costBasis.minus(dec(e.valuation.lot.unitPrice).times(e.valuation.lot.quantity)), e.valuation.lot.currency),
+        m(
+          e.valuation.costBasis.minus(dec(e.valuation.lot.unitPrice).times(e.valuation.lot.quantity)),
+          e.valuation.lot.currency,
+        ),
     },
     { header: "purchase_date", value: (e) => e.valuation.lot.purchaseDate ?? "" },
     { header: "cost_basis", value: (e) => m(e.valuation.costBasis, e.valuation.lot.currency) },
     { header: "unit_market_value", value: (e) => m(e.valuation.unitValue, e.valuation.lot.currency) },
     { header: "market_value", value: (e) => m(e.valuation.marketValue, e.valuation.lot.currency) },
     { header: "unrealized_gain", value: (e) => m(e.valuation.gain, e.valuation.lot.currency) },
-    { header: "unrealized_gain_pct", value: (e) => (e.valuation.gainPct === null ? "" : e.valuation.gainPct.toFixed(2)) },
+    {
+      header: "unrealized_gain_pct",
+      value: (e) => (e.valuation.gainPct === null ? "" : e.valuation.gainPct.toFixed(2)),
+    },
     { header: "price_status", value: (e) => e.valuation.priceStatus },
     { header: "price_as_of", value: (e) => e.valuation.priceAsOf?.toISOString() ?? "" },
     { header: "notes", value: (e) => e.sealed?.notes ?? e.card?.notes ?? "" },

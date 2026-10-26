@@ -12,7 +12,8 @@ export function escapeCsvCell(value: CsvValue): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   let s = value;
-  if (FORMULA_TRIGGER.test(s)) s = `'${s}`;
+  // Plain numbers such as "-7.00" are data, not formulas.
+  if (FORMULA_TRIGGER.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`;
   if (/[",\r\n]/.test(s)) s = `"${s.replace(/"/g, '""')}"`;
   return s;
 }

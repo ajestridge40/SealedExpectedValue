@@ -8,7 +8,10 @@ import { Field, Input, Select } from "./ui/form";
 /** GET form: filter state lives in the URL, so results are shareable and work without JS. */
 export function ProductFiltersForm({ f, games, sets }: { f: ProductFilters; games: Game[]; sets: SetRow[] }) {
   return (
-    <form method="get" className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
+    <form
+      method="get"
+      className="border-border bg-surface grid grid-cols-2 gap-3 rounded-xl border p-4 sm:grid-cols-3 lg:grid-cols-6"
+    >
       <Field label="Search" htmlFor="q" className="col-span-2 sm:col-span-3 lg:col-span-2">
         <Input id="q" name="q" defaultValue={f.q} placeholder="Product or set name" />
       </Field>
@@ -52,13 +55,38 @@ export function ProductFiltersForm({ f, games, sets }: { f: ProductFilters; game
         </Select>
       </Field>
       <Field label="Min price" htmlFor="minPrice">
-        <Input id="minPrice" name="minPrice" type="number" min={0} step="0.01" inputMode="decimal" defaultValue={f.minPrice} />
+        <Input
+          id="minPrice"
+          name="minPrice"
+          type="number"
+          min={0}
+          step="0.01"
+          inputMode="decimal"
+          defaultValue={f.minPrice}
+        />
       </Field>
       <Field label="Max price" htmlFor="maxPrice">
-        <Input id="maxPrice" name="maxPrice" type="number" min={0} step="0.01" inputMode="decimal" defaultValue={f.maxPrice} />
+        <Input
+          id="maxPrice"
+          name="maxPrice"
+          type="number"
+          min={0}
+          step="0.01"
+          inputMode="decimal"
+          defaultValue={f.maxPrice}
+        />
       </Field>
       <Field label="Min EV / price" htmlFor="minRatio">
-        <Input id="minRatio" name="minRatio" type="number" min={0} step="0.05" inputMode="decimal" defaultValue={f.minRatio} placeholder="e.g. 1.0" />
+        <Input
+          id="minRatio"
+          name="minRatio"
+          type="number"
+          min={0}
+          step="0.05"
+          inputMode="decimal"
+          defaultValue={f.minRatio}
+          placeholder="e.g. 1.0"
+        />
       </Field>
       <Field label="Net EV" htmlFor="net">
         <Select id="net" name="net" defaultValue={f.net ?? ""}>

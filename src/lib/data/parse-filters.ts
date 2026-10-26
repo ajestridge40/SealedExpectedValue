@@ -5,7 +5,7 @@ import { param } from "../utils";
 const num = z.coerce.number().finite().nonnegative().max(1_000_000);
 
 export function parseProductFilters(sp: Record<string, string | string[] | undefined>): ProductFilters {
-  const opt = <T,>(schema: z.ZodType<T>, v: string | undefined) => {
+  const opt = <T>(schema: z.ZodType<T>, v: string | undefined) => {
     if (v === undefined) return undefined;
     const r = schema.safeParse(v);
     return r.success ? r.data : undefined;

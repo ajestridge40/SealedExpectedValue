@@ -5,7 +5,15 @@ import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <EmptyState icon={SearchX} title="Page not found" action={<Button asChild variant="primary"><Link href="/products">Browse products</Link></Button>}>
+    <EmptyState
+      icon={SearchX}
+      title="Page not found"
+      action={
+        <Button asChild variant="primary">
+          <Link href="/products">Browse products</Link>
+        </Button>
+      }
+    >
       That product, card or page doesn&apos;t exist.
     </EmptyState>
   );

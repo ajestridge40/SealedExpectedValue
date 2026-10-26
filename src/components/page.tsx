@@ -14,7 +14,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {description ? <p className="mt-1 max-w-2xl text-sm text-muted">{description}</p> : null}
+        {description ? <p className="text-muted mt-1 max-w-2xl text-sm">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>
@@ -37,15 +37,15 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center",
+        "border-border-strong flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center",
         className,
       )}
     >
-      <div className="rounded-full bg-surface-2 p-3 text-accent">
+      <div className="bg-surface-2 text-accent rounded-full p-3">
         <Icon className="size-6" aria-hidden />
       </div>
       <h2 className="text-base font-semibold">{title}</h2>
-      {children ? <div className="max-w-md text-sm text-muted">{children}</div> : null}
+      {children ? <div className="text-muted max-w-md text-sm">{children}</div> : null}
       {action}
     </div>
   );
@@ -63,10 +63,10 @@ export function Stat({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-xl border border-border bg-surface p-4", className)}>
-      <div className="text-xs text-muted">{label}</div>
-      <div className="mt-1 text-xl font-semibold tracking-tight tabular sm:text-2xl">{value}</div>
-      {sub ? <div className="mt-1 text-xs text-muted">{sub}</div> : null}
+    <div className={cn("border-border bg-surface rounded-xl border p-4", className)}>
+      <div className="text-muted text-xs">{label}</div>
+      <div className="tabular mt-1 text-xl font-semibold tracking-tight sm:text-2xl">{value}</div>
+      {sub ? <div className="text-muted mt-1 text-xs">{sub}</div> : null}
     </div>
   );
 }
@@ -87,7 +87,10 @@ export function Notice({
     success: "border-gain/30 bg-gain-soft text-fg",
   };
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={cn("rounded-lg border px-3 py-2 text-sm", tones[tone], className)}>
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className={cn("rounded-lg border px-3 py-2 text-sm", tones[tone], className)}
+    >
       {children}
     </div>
   );

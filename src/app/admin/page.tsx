@@ -26,12 +26,19 @@ export default async function AdminPage() {
     count("cards", "current_price"),
     count("sets"),
     count("sets", "tcgplayer_group_id"),
-    supabase.from("job_runs").select("id, job, status, started_at, finished_at, details").order("started_at", { ascending: false }).limit(10),
+    supabase
+      .from("job_runs")
+      .select("id, job, status, started_at, finished_at, details")
+      .order("started_at", { ascending: false })
+      .limit(10),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Admin" description="Catalog import, price refresh and price imports. Admin rights are set in the database (profiles.is_admin)." />
+      <PageHeader
+        title="Admin"
+        description="Catalog import, price refresh and price imports. Admin rights are set in the database (profiles.is_admin)."
+      />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Sets linked to TCGplayer" value={`${linkedSets} / ${sets}`} />
         <Stat label="Products linked" value={`${linkedProducts} / ${products}`} />
@@ -46,34 +53,57 @@ export default async function AdminPage() {
             refresh then stores one price snapshot per item per day. The scheduled job does the same daily.
           </CardDescription>
         </CardHeader>
-        <CardContent><JobButtons /></CardContent>
+        <CardContent>
+          <JobButtons />
+        </CardContent>
       </Card>
       <Card>
         <CardHeader>
           <CardTitle>Import prices from CSV</CardTitle>
           <CardDescription>
             Columns: <code>item_type</code> (sealed|card), <code>item_id</code> or <code>tcgplayer_product_id</code>,{" "}
-            <code>printing</code>, <code>market_price</code>, <code>currency</code>, <code>as_of</code>, <code>note</code>. Max 1 MB /
-            5,000 rows. Stored as “CSV import”, never as live provider data.
+            <code>printing</code>, <code>market_price</code>, <code>currency</code>, <code>as_of</code>,{" "}
+            <code>note</code>. Max 1 MB / 5,000 rows. Stored as “CSV import”, never as live provider data.
           </CardDescription>
         </CardHeader>
-        <CardContent><CsvImportForm /></CardContent>
+        <CardContent>
+          <CsvImportForm />
+        </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Recent jobs</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Recent jobs</CardTitle>
+        </CardHeader>
         <CardContent>
           <Table>
-            <thead><tr><Th>Job</Th><Th>Status</Th><Th>Started</Th><Th>Finished</Th><Th>Details</Th></tr></thead>
+            <thead>
+              <tr>
+                <Th>Job</Th>
+                <Th>Status</Th>
+                <Th>Started</Th>
+                <Th>Finished</Th>
+                <Th>Details</Th>
+              </tr>
+            </thead>
             <tbody>
               {(jobs.data ?? []).map((j) => {
-                const d = (j.details ?? {}) as { snapshotsWritten?: number; setsProcessed?: number; errors?: string[]; reason?: string };
+                const d = (j.details ?? {}) as {
+                  snapshotsWritten?: number;
+                  setsProcessed?: number;
+                  errors?: string[];
+                  reason?: string;
+                };
                 return (
                   <tr key={j.id}>
                     <Td>{j.job}</Td>
-                    <Td><Badge tone={j.status === "succeeded" ? "gain" : j.status === "failed" ? "loss" : "neutral"}>{j.status}</Badge></Td>
+                    <Td>
+                      <Badge tone={j.status === "succeeded" ? "gain" : j.status === "failed" ? "loss" : "neutral"}>
+                        {j.status}
+                      </Badge>
+                    </Td>
                     <Td>{formatDateTime(j.started_at)}</Td>
                     <Td>{formatDateTime(j.finished_at)}</Td>
-                    <Td className="text-xs text-muted">
+                    <Td className="text-muted text-xs">
                       {d.snapshotsWritten !== undefined ? `${d.snapshotsWritten} prices, ${d.setsProcessed} sets` : ""}
                       {d.reason ?? ""}
                       {d.errors?.length ? ` · ${d.errors.length} error(s): ${d.errors.slice(0, 2).join("; ")}` : ""}
@@ -83,7 +113,7 @@ export default async function AdminPage() {
               })}
             </tbody>
           </Table>
-          {!jobs.data?.length ? <p className="text-sm text-muted">No runs yet.</p> : null}
+          {!jobs.data?.length ? <p className="text-muted text-sm">No runs yet.</p> : null}
         </CardContent>
       </Card>
     </div>

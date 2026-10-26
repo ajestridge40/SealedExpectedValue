@@ -20,12 +20,12 @@ export function EvBreakdown({ ev }: { ev: EvResult }) {
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <h4 id={`slot-${slot.id}`} className="text-sm font-medium">
               {slot.name}{" "}
-              <span className="text-xs font-normal text-muted">
+              <span className="text-muted text-xs font-normal">
                 × {slot.occurrences.toString()} per product{slot.kind === "guaranteed" ? " · guaranteed" : ""}
               </span>
             </h4>
-            <span className="text-sm text-muted">
-              Slot EV <span className="font-medium text-fg">{formatMoney(slot.ev, ev.currency)}</span>
+            <span className="text-muted text-sm">
+              Slot EV <span className="text-fg font-medium">{formatMoney(slot.ev, ev.currency)}</span>
             </span>
           </div>
           <Table>
@@ -56,13 +56,20 @@ export function EvBreakdown({ ev }: { ev: EvResult }) {
                     <div className="flex flex-col gap-1">
                       <SourceTypeBadge type={o.source.type} />
                       {o.source.url ? (
-                        <a href={o.source.url} rel="noreferrer nofollow" target="_blank" className="text-xs text-accent hover:underline">
+                        <a
+                          href={o.source.url}
+                          rel="noreferrer nofollow"
+                          target="_blank"
+                          className="text-accent text-xs hover:underline"
+                        >
                           {o.source.name ?? "Source"}
                         </a>
                       ) : o.source.name ? (
-                        <span className="text-xs text-muted">{o.source.name}</span>
+                        <span className="text-muted text-xs">{o.source.name}</span>
                       ) : null}
-                      {o.source.sampleSize ? <span className="text-xs text-subtle">n ≈ {o.source.sampleSize.toLocaleString()} packs</span> : null}
+                      {o.source.sampleSize ? (
+                        <span className="text-subtle text-xs">n ≈ {o.source.sampleSize.toLocaleString()} packs</span>
+                      ) : null}
                     </div>
                   </Td>
                 </tr>

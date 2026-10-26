@@ -1,13 +1,6 @@
 import { z } from "zod";
 import { fetchJson, fetchText, ProviderError } from "../http";
-import type {
-  PricingProvider,
-  ProviderCard,
-  ProviderPrice,
-  ProviderProduct,
-  ProviderSet,
-  SearchQuery,
-} from "../types";
+import type { PricingProvider, ProviderCard, ProviderPrice, ProviderProduct, ProviderSet, SearchQuery } from "../types";
 
 /**
  * TCGCSV (https://tcgcsv.com): a free, community-run daily mirror of
@@ -105,7 +98,10 @@ export class TcgcsvProvider implements PricingProvider {
 
   private async list<T extends z.ZodType>(path: string, schema: T): Promise<z.infer<T>[]> {
     return this.memo(path, async () => {
-      const body = await fetchJson<unknown>(`${BASE}/tcgplayer/${path}`, { fetchImpl: this.fetchImpl, minIntervalMs: 150 });
+      const body = await fetchJson<unknown>(`${BASE}/tcgplayer/${path}`, {
+        fetchImpl: this.fetchImpl,
+        minIntervalMs: 150,
+      });
       const parsed = envelope(schema).safeParse(body);
       if (!parsed.success) throw new ProviderError(`TCGCSV ${path}: unexpected response shape`);
       if (parsed.data.success === false) throw new ProviderError(`TCGCSV ${path}: ${parsed.data.errors?.join("; ")}`);

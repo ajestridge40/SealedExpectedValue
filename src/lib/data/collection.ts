@@ -80,7 +80,11 @@ const CARD_SELECT =
 
 function price(item: PricedItem | null) {
   return item && item.current_price !== null
-    ? { amount: String(item.current_price), currency: item.current_price_currency ?? "USD", asOf: item.price_updated_at }
+    ? {
+        amount: String(item.current_price),
+        currency: item.current_price_currency ?? "USD",
+        asOf: item.price_updated_at,
+      }
     : null;
 }
 
@@ -89,12 +93,24 @@ function manual(v: number | null, asOf: string | null) {
 }
 
 /** The signed-in user's lots (RLS restricts rows to the owner), valued lot by lot. */
-export async function getCollection(): Promise<{ entries: CollectionEntry[]; totals: PortfolioTotals[]; currency: string }> {
+export async function getCollection(): Promise<{
+  entries: CollectionEntry[];
+  totals: PortfolioTotals[];
+  currency: string;
+}> {
   await requireUser("/collection");
   const supabase = await createClient();
   const [sealed, cards, sets, stale, profile] = await Promise.all([
-    supabase.from("collection_sealed_positions").select(SEALED_SELECT).order("created_at", { ascending: false }).limit(5000),
-    supabase.from("collection_card_positions").select(CARD_SELECT).order("created_at", { ascending: false }).limit(5000),
+    supabase
+      .from("collection_sealed_positions")
+      .select(SEALED_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(5000),
+    supabase
+      .from("collection_card_positions")
+      .select(CARD_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(5000),
     getSets(),
     staleAfterHours(),
     getProfile(),
@@ -140,7 +156,9 @@ export async function getCollection(): Promise<{ entries: CollectionEntry[]; tot
       const lot: LotInput = {
         id: r.id,
         assetType: "card",
-        itemKey: c ? `card:${c.id}:${graded ? `${r.grading_company}-${r.grade}` : r.condition ?? ""}` : `custom-card:${(r.custom_name ?? "").toLowerCase()}`,
+        itemKey: c
+          ? `card:${c.id}:${graded ? `${r.grading_company}-${r.grade}` : (r.condition ?? "")}`
+          : `custom-card:${(r.custom_name ?? "").toLowerCase()}`,
         itemName: c ? `${c.name}${c.number ? ` ${c.number}` : ""}` : (r.custom_name ?? "Custom card"),
         quantity: r.quantity,
         unitPrice: String(r.purchase_price_per_unit),
@@ -155,7 +173,11 @@ export async function getCollection(): Promise<{ entries: CollectionEntry[]; tot
         id: r.id,
         type: "card" as const,
         name: lot.itemName,
-        detail: [c?.printing, graded ? `${r.grading_company} ${r.grade ?? ""}`.trim() : r.condition, r.language !== "English" ? r.language : null]
+        detail: [
+          c?.printing,
+          graded ? `${r.grading_company} ${r.grade ?? ""}`.trim() : r.condition,
+          r.language !== "English" ? r.language : null,
+        ]
           .filter(Boolean)
           .join(" · "),
         setName: c ? setName(c.set_id) : r.custom_set_name,

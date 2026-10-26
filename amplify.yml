@@ -1,0 +1,22 @@
+# AWS Amplify Hosting build spec (alternative to Vercel). Set the same
+# environment variables as .env.example in the Amplify console.
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        # Amplify exposes console env vars at build time; write the server-side
+        # ones to .env.production so the Next.js server runtime can read them.
+        - env | grep -E '^(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|CRON_SECRET|ENABLE_TCGCSV|ENABLE_POKEMONTCG|POKEMONTCG_API_KEY|PRICE_REFRESH_MIN_INTERVAL_HOURS)=' >> .env.production || true
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*

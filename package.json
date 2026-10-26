@@ -1,12 +1,24 @@
 {
-  "name": "app",
+  "name": "sealedev",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:db": "vitest run tests/db",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "db:push": "npx supabase db push",
+    "db:reset": "npx supabase db reset",
+    "db:seed": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/seed.sql",
+    "catalog:import": "tsx --env-file-if-exists=.env.local scripts/import-catalog.mts",
+    "prices:refresh": "tsx --env-file-if-exists=.env.local scripts/refresh-prices.mts",
+    "user:make-admin": "tsx --env-file-if-exists=.env.local scripts/make-admin.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -41,5 +53,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=20.9"
   }
 }

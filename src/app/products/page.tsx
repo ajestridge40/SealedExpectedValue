@@ -49,7 +49,7 @@ export default async function ProductsPage({
       ) : (
         <form action="/compare" method="get" className="mt-6">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-sm text-muted">
+            <p className="text-muted text-sm">
               {items.length} of {all.length} products
             </p>
             <Button type="submit" size="sm">

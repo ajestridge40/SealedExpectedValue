@@ -29,7 +29,11 @@ export function ScenarioCalculator({
   const be = breakEvenPrice(gross, /^\d+(\.\d+)?$/.test(costs) ? costs : 0);
 
   if (!gross) {
-    return <p className="text-sm text-muted">The scenario calculator needs an EV estimate, which is not available for this product.</p>;
+    return (
+      <p className="text-muted text-sm">
+        The scenario calculator needs an EV estimate, which is not available for this product.
+      </p>
+    );
   }
 
   return (
@@ -45,15 +49,15 @@ export function ScenarioCalculator({
             onChange={(e) => setCosts(e.target.value)}
           />
         </div>
-        <p className="text-sm text-muted">
-          Break-even purchase price: <span className="font-medium text-fg">{formatMoney(be, currency)}</span>
+        <p className="text-muted text-sm">
+          Break-even purchase price: <span className="text-fg font-medium">{formatMoney(be, currency)}</span>
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm tabular">
+        <table className="tabular w-full text-sm">
           <caption className="sr-only">Net return at different purchase prices</caption>
           <thead>
-            <tr className="text-left text-xs text-muted">
+            <tr className="text-muted text-left text-xs">
               <th className="py-2 pr-3 font-medium">You pay</th>
               <th className="py-2 pr-3 font-medium">Est. EV</th>
               <th className="py-2 pr-3 font-medium">Est. net return</th>
@@ -64,10 +68,14 @@ export function ScenarioCalculator({
           </thead>
           <tbody>
             {prices.map((p, i) => {
-              const r = calculateReturns({ grossEv: gross, purchasePrice: p, openingCosts: /^\d+(\.\d+)?$/.test(costs) ? costs : null });
+              const r = calculateReturns({
+                grossEv: gross,
+                purchasePrice: p,
+                openingCosts: /^\d+(\.\d+)?$/.test(costs) ? costs : null,
+              });
               const tone = r.netEv ? (r.netEv.gt(0) ? "text-gain" : r.netEv.lt(0) ? "text-loss" : "") : "";
               return (
-                <tr key={i} className="border-t border-border/60">
+                <tr key={i} className="border-border/60 border-t">
                   <td className="py-2 pr-3">
                     <label className="sr-only" htmlFor={`scenario-${i}`}>
                       Scenario {i + 1} purchase price
@@ -82,13 +90,22 @@ export function ScenarioCalculator({
                   </td>
                   <td className="py-2 pr-3">{formatMoney(gross, currency)}</td>
                   <td className={cn("py-2 pr-3 font-medium", tone)}>
-                    {r.status === "invalid_price" ? <span className="text-xs text-loss">Enter a price above 0</span> : formatMoney(r.netEv, currency, { signed: true })}
+                    {r.status === "invalid_price" ? (
+                      <span className="text-loss text-xs">Enter a price above 0</span>
+                    ) : (
+                      formatMoney(r.netEv, currency, { signed: true })
+                    )}
                   </td>
                   <td className={cn("py-2 pr-3", tone)}>{formatPercent(r.netReturnPct, { signed: true })}</td>
                   <td className="py-2 pr-3">{formatRatio(r.evToPrice)}</td>
                   <td className="py-2 text-right">
                     {prices.length > 1 ? (
-                      <Button variant="ghost" size="icon" aria-label={`Remove scenario ${i + 1}`} onClick={() => setPrices((xs) => xs.filter((_, j) => j !== i))}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove scenario ${i + 1}`}
+                        onClick={() => setPrices((xs) => xs.filter((_, j) => j !== i))}
+                      >
                         <X />
                       </Button>
                     ) : null}
@@ -104,7 +121,7 @@ export function ScenarioCalculator({
           <Plus /> Add scenario
         </Button>
       ) : null}
-      <p className="text-xs text-subtle">
+      <p className="text-subtle text-xs">
         Net return = EV − price − extra costs. It is an average: most individual boxes land well below or above it.
       </p>
     </div>

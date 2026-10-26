@@ -29,9 +29,14 @@ export function CatalogImage({
   );
   if (!safe || failed) {
     return (
-      <div className={cn(box, "flex flex-col items-center justify-center gap-1 border border-dashed border-border-strong text-subtle")}>
-        <ImageOff className="size-5" aria-hidden />
-        <span className="text-[10px]">No image</span>
+      <div
+        className={cn(
+          box,
+          "border-border-strong text-subtle @container flex flex-col items-center justify-center gap-1 border border-dashed",
+        )}
+      >
+        <ImageOff className="size-4" aria-hidden />
+        <span className="text-[10px] [@container(max-width:64px)]:hidden">No image</span>
         <span className="sr-only">{alt}</span>
       </div>
     );

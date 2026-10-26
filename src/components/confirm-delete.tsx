@@ -25,15 +25,20 @@ export function ConfirmDelete({
   return (
     <AlertDialog.Root>
       <AlertDialog.Trigger asChild>
-        <Button variant="ghost" size={size} aria-label={size === "icon" ? label : undefined} className="text-muted hover:text-loss">
+        <Button
+          variant="ghost"
+          size={size}
+          aria-label={size === "icon" ? label : undefined}
+          className="text-muted hover:text-loss"
+        >
           <Trash2 /> {size === "icon" ? null : label}
         </Button>
       </AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border-strong bg-surface p-5 shadow-xl">
+        <AlertDialog.Content className="border-border-strong bg-surface fixed top-1/2 left-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border p-5 shadow-xl">
           <AlertDialog.Title className="text-base font-semibold">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="mt-2 text-sm text-muted">{description}</AlertDialog.Description>
+          <AlertDialog.Description className="text-muted mt-2 text-sm">{description}</AlertDialog.Description>
           <form action={action} className="mt-5 flex justify-end gap-2">
             {Object.entries(fields).map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />

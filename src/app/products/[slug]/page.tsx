@@ -80,7 +80,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <div className="flex flex-col gap-6">
-      <nav aria-label="Breadcrumb" className="text-xs text-muted">
+      <nav aria-label="Breadcrumb" className="text-muted text-xs">
         <Link href="/products" className="hover:text-fg">
           Sealed products
         </Link>{" "}
@@ -90,11 +90,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       {/* Header */}
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card className="p-4">
-          <CatalogImage src={product.image_url?.replace("_200w", "_400w")} alt={product.name} aspect="square" className="bg-transparent" />
+          <CatalogImage
+            src={product.image_url?.replace("_200w", "_400w")}
+            alt={product.name}
+            aspect="square"
+            className="bg-transparent"
+          />
         </Card>
         <div className="flex flex-col gap-4">
           <div>
-            <div className="flex flex-wrap gap-1.5 text-xs text-muted">
+            <div className="text-muted flex flex-wrap gap-1.5 text-xs">
               <span>{game?.name}</span>·<span>{PRODUCT_TYPE_LABELS[product.product_type]}</span>
               {product.release_date ? (
                 <>
@@ -103,28 +108,30 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               ) : null}
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">{product.name}</h1>
-            {set ? <p className="text-sm text-muted">Set: {set.name}</p> : null}
-            {product.description ? <p className="mt-3 max-w-2xl text-sm text-muted">{product.description}</p> : null}
+            {set ? <p className="text-muted text-sm">Set: {set.name}</p> : null}
+            {product.description ? <p className="text-muted mt-3 max-w-2xl text-sm">{product.description}</p> : null}
             {product.pack_configuration ? (
-              <p className="mt-1 text-sm text-muted">
+              <p className="text-muted mt-1 text-sm">
                 <span className="text-fg">Contents:</span> {product.pack_configuration}
               </p>
             ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-border bg-surface p-3">
-              <div className="text-xs text-muted">Market price</div>
+            <div className="border-border bg-surface rounded-lg border p-3">
+              <div className="text-muted text-xs">Market price</div>
               <div className="text-xl font-semibold">
                 <Money value={product.current_price} currency={currency} />
               </div>
             </div>
-            <div className="rounded-lg border border-border bg-surface p-3">
-              <div className="text-xs text-muted">Est. gross EV</div>
-              <div className="text-xl font-semibold">{showEv ? <Money value={ev!.grossEv} currency={currency} /> : "—"}</div>
+            <div className="border-border bg-surface rounded-lg border p-3">
+              <div className="text-muted text-xs">Est. gross EV</div>
+              <div className="text-xl font-semibold">
+                {showEv ? <Money value={ev!.grossEv} currency={currency} /> : "—"}
+              </div>
             </div>
-            <div className="rounded-lg border border-border bg-surface p-3">
-              <div className="text-xs text-muted">Est. net return</div>
+            <div className="border-border bg-surface rounded-lg border p-3">
+              <div className="text-muted text-xs">Est. net return</div>
               <div className="text-xl font-semibold">
                 <Money value={pe.returns.netEv} currency={currency} signed />
               </div>
@@ -132,9 +139,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 <Percent value={pe.returns.netReturnPct} />
               </div>
             </div>
-            <div className="rounded-lg border border-border bg-surface p-3">
-              <div className="text-xs text-muted">EV / price</div>
-              <div className="text-xl font-semibold tabular">{formatRatio(pe.returns.evToPrice)}</div>
+            <div className="border-border bg-surface rounded-lg border p-3">
+              <div className="text-muted text-xs">EV / price</div>
+              <div className="tabular text-xl font-semibold">{formatRatio(pe.returns.evToPrice)}</div>
             </div>
           </div>
 
@@ -145,14 +152,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <FreshnessBadge asOf={product.price_updated_at} staleAfterHours={stale} />
             {product.is_sample ? <Badge tone="warn">Sample data</Badge> : null}
           </div>
-          <p className="text-xs text-subtle">
+          <p className="text-subtle text-xs">
             Last price update: {formatDateTime(product.price_updated_at)}
             {source ? ` · ${source.name}` : ""}
             {product.tcgplayer_product_id ? (
               <>
                 {" · "}
                 <a
-                  className="inline-flex items-center gap-1 hover:text-fg"
+                  className="hover:text-fg inline-flex items-center gap-1"
                   href={`https://www.tcgplayer.com/product/${product.tcgplayer_product_id}`}
                   rel="noreferrer nofollow"
                   target="_blank"
@@ -165,7 +172,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="primary">
-              <Link href={user ? `/collection/add?type=sealed&item=${product.id}` : `/login?next=${encodeURIComponent(path)}`}>
+              <Link
+                href={
+                  user ? `/collection/add?type=sealed&item=${product.id}` : `/login?next=${encodeURIComponent(path)}`
+                }
+              >
                 <Plus /> Add to collection
               </Link>
             </Button>
@@ -187,24 +198,36 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <Card>
           <CardHeader>
             <CardTitle>Price history</CardTitle>
-            <CardDescription>Daily snapshots stored by SealedEV. Imported and manual prices are labelled.</CardDescription>
+            <CardDescription>
+              Daily snapshots stored by SealedEV. Imported and manual prices are labelled.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <PriceChart
               currency={currency}
               points={history
                 .filter((h) => h.currency === currency)
-                .map((h) => ({ t: h.provider_as_of ?? h.captured_at, price: Number(h.market_price), kind: h.source_kind }))}
+                .map((h) => ({
+                  t: h.provider_as_of ?? h.captured_at,
+                  price: Number(h.market_price),
+                  kind: h.source_kind,
+                }))}
             />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Scenario calculator</CardTitle>
-            <CardDescription>Try different purchase prices. The underlying EV and market data do not change.</CardDescription>
+            <CardDescription>
+              Try different purchase prices. The underlying EV and market data do not change.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <ScenarioCalculator ev={showEv ? ev!.grossEv!.toFixed(2) : null} currency={currency} marketPrice={product.current_price === null ? null : String(product.current_price)} />
+            <ScenarioCalculator
+              ev={showEv ? ev!.grossEv!.toFixed(2) : null}
+              currency={currency}
+              marketPrice={product.current_price === null ? null : String(product.current_price)}
+            />
           </CardContent>
         </Card>
       </div>
@@ -220,8 +243,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </CardHeader>
         <CardContent>
           {topCards.length === 0 ? (
-            <p className="text-sm text-muted">
-              No priced cards are linked to this product&apos;s pull model yet. Run the catalog import and price refresh.
+            <p className="text-muted text-sm">
+              No priced cards are linked to this product&apos;s pull model yet. Run the catalog import and price
+              refresh.
             </p>
           ) : (
             <ol className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -230,18 +254,20 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   <Link href={`/cards/${c.card.id}`} className="group">
                     <div className="relative">
                       <CatalogImage src={c.card.imageUrl?.replace("_200w", "_400w")} alt={c.card.name} />
-                      <span className="absolute top-1.5 left-1.5 rounded bg-bg/85 px-1.5 text-xs font-semibold text-accent">#{i + 1}</span>
+                      <span className="bg-bg/85 text-accent absolute top-1.5 left-1.5 rounded px-1.5 text-xs font-semibold">
+                        #{i + 1}
+                      </span>
                     </div>
-                    <div className="mt-2 text-sm font-medium group-hover:text-accent">{c.card.name}</div>
+                    <div className="group-hover:text-accent mt-2 text-sm font-medium">{c.card.name}</div>
                   </Link>
-                  <div className="text-xs text-muted">
+                  <div className="text-muted text-xs">
                     {c.card.rarity}
                     {c.card.number ? ` · ${c.card.number}` : ""}
                   </div>
                   <div className="text-sm font-semibold">
                     <Money value={c.card.price?.amount} currency={c.card.price?.currency} />
                   </div>
-                  <div className="text-xs text-muted">{chanceLabel(c, unit)}</div>
+                  <div className="text-muted text-xs">{chanceLabel(c, unit)}</div>
                 </li>
               ))}
             </ol>
@@ -267,24 +293,26 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <>
               <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                 <div>
-                  <dt className="text-xs text-muted">Pull-rate confidence</dt>
+                  <dt className="text-muted text-xs">Pull-rate confidence</dt>
                   <dd className="mt-1">
                     <ConfidenceBadge level={ev.pullRateConfidence} />
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">Probability known</dt>
+                  <dt className="text-muted text-xs">Probability known</dt>
                   <dd className="mt-1 font-medium">{(ev.probabilityCoverage * 100).toFixed(1)}%</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">Probability mass priced</dt>
+                  <dt className="text-muted text-xs">Probability mass priced</dt>
                   <dd className="mt-1 font-medium">{(ev.priceCoverage * 100).toFixed(1)}%</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">Pricing freshness</dt>
+                  <dt className="text-muted text-xs">Pricing freshness</dt>
                   <dd className="mt-1 font-medium capitalize">
                     {ev.freshness.label}
-                    {ev.freshness.staleCount ? <span className="text-xs text-warn"> · {ev.freshness.staleCount} stale</span> : null}
+                    {ev.freshness.staleCount ? (
+                      <span className="text-warn text-xs"> · {ev.freshness.staleCount} stale</span>
+                    ) : null}
                   </dd>
                 </div>
               </dl>
@@ -302,9 +330,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               ) : null}
 
               {ev.issues.length ? (
-                <details className="rounded-lg border border-border p-3 text-sm">
-                  <summary className="cursor-pointer text-muted">{ev.issues.length} data note(s)</summary>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
+                <details className="border-border rounded-lg border p-3 text-sm">
+                  <summary className="text-muted cursor-pointer">{ev.issues.length} data note(s)</summary>
+                  <ul className="text-muted mt-2 list-disc space-y-1 pl-5">
                     {ev.issues.map((i, n) => (
                       <li key={n} className={i.level === "error" ? "text-loss" : undefined}>
                         {i.message}
@@ -315,13 +343,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               ) : null}
 
               {pe.model ? (
-                <div className="rounded-lg bg-surface-2 p-3 text-sm">
+                <div className="bg-surface-2 rounded-lg p-3 text-sm">
                   <div className="font-medium">
-                    {pe.model.name} <span className="text-xs font-normal text-muted">v{pe.model.version} · {pe.model.packs_per_product} packs</span>
+                    {pe.model.name}{" "}
+                    <span className="text-muted text-xs font-normal">
+                      v{pe.model.version} · {pe.model.packs_per_product} packs
+                    </span>
                   </div>
-                  {pe.model.description ? <p className="mt-1 text-muted">{pe.model.description}</p> : null}
+                  {pe.model.description ? <p className="text-muted mt-1">{pe.model.description}</p> : null}
                   {pe.model.assumptions ? (
-                    <p className="mt-1 text-muted">
+                    <p className="text-muted mt-1">
                       <span className="text-fg">Assumptions:</span> {pe.model.assumptions}
                     </p>
                   ) : null}
@@ -337,24 +368,33 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                     <li key={i} className="flex flex-wrap items-center gap-2">
                       <SourceTypeBadge type={s.type} />
                       {s.url ? (
-                        <a href={s.url} target="_blank" rel="noreferrer nofollow" className="text-accent hover:underline">
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noreferrer nofollow"
+                          className="text-accent hover:underline"
+                        >
                           {s.name ?? s.url}
                         </a>
                       ) : (
                         <span>{s.name ?? "Unsourced"}</span>
                       )}
-                      {s.sampleSize ? <span className="text-xs text-muted">sample ≈ {s.sampleSize.toLocaleString()} packs</span> : null}
-                      {s.lastVerifiedAt ? <span className="text-xs text-muted">checked {formatDate(s.lastVerifiedAt)}</span> : null}
+                      {s.sampleSize ? (
+                        <span className="text-muted text-xs">sample ≈ {s.sampleSize.toLocaleString()} packs</span>
+                      ) : null}
+                      {s.lastVerifiedAt ? (
+                        <span className="text-muted text-xs">checked {formatDate(s.lastVerifiedAt)}</span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-xs text-subtle">
+                <p className="text-subtle mt-2 text-xs">
                   Community estimates come from public pack-opening samples; they are not probabilities published by the
                   manufacturer.
                 </p>
               </section>
 
-              <details className="rounded-lg border border-border">
+              <details className="border-border rounded-lg border">
                 <summary className="cursor-pointer p-3 text-sm font-medium">
                   All {allCards.length} cards included in the calculation
                 </summary>
@@ -376,18 +416,26 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                           <Link href={`/cards/${c.card.id}`} className="hover:text-accent">
                             {c.card.name}
                           </Link>{" "}
-                          <span className="text-xs text-subtle">{c.card.number}</span>
+                          <span className="text-subtle text-xs">{c.card.number}</span>
                         </Td>
                         <Td className="text-muted">{c.card.rarity}</Td>
                         <Td className="text-muted">{c.card.printing}</Td>
-                        <Td>{c.card.price ? <Money value={c.card.price.amount} currency={c.card.price.currency} /> : <span className="text-muted">no price</span>}</Td>
+                        <Td>
+                          {c.card.price ? (
+                            <Money value={c.card.price.amount} currency={c.card.price.currency} />
+                          ) : (
+                            <span className="text-muted">no price</span>
+                          )}
+                        </Td>
                         <Td>{c.expectedCount.toDecimalPlaces(4).toString()}</Td>
                         <Td>{c.ev ? formatMoney(c.ev, currency) : "—"}</Td>
                       </tr>
                     ))}
                   </tbody>
                 </Table>
-                {allCards.length > 400 ? <p className="p-3 text-xs text-muted">Showing the 400 largest contributions.</p> : null}
+                {allCards.length > 400 ? (
+                  <p className="text-muted p-3 text-xs">Showing the 400 largest contributions.</p>
+                ) : null}
               </details>
             </>
           )}

@@ -49,7 +49,14 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
           .select("id, printing, current_price, current_price_currency")
           .eq("tcgplayer_product_id", card.tcgplayer_product_id)
           .neq("id", card.id)
-      : Promise.resolve({ data: [] as { id: string; printing: string; current_price: number | null; current_price_currency: string | null }[] }),
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            printing: string;
+            current_price: number | null;
+            current_price_currency: string | null;
+          }[],
+        }),
   ]);
   const set = sets.find((s) => s.id === card.set_id);
   const game = games.find((g) => g.id === card.game_id);
@@ -59,30 +66,57 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="flex flex-col gap-6">
-      <nav aria-label="Breadcrumb" className="text-xs text-muted">
-        <Link href="/cards" className="hover:text-fg">Cards</Link> / <span className="text-fg">{card.name}</span>
+      <nav aria-label="Breadcrumb" className="text-muted text-xs">
+        <Link href="/cards" className="hover:text-fg">
+          Cards
+        </Link>{" "}
+        / <span className="text-fg">{card.name}</span>
       </nav>
       <div className="grid gap-6 md:grid-cols-[300px_1fr]">
-        <CatalogImage src={card.image_url?.replace("_200w", "_400w")} alt={`${card.name} ${card.number ?? ""}`} className="w-full" />
+        <CatalogImage
+          src={card.image_url?.replace("_200w", "_400w")}
+          alt={`${card.name} ${card.number ?? ""}`}
+          className="w-full"
+        />
         <div className="flex flex-col gap-4">
           <div>
-            <p className="text-xs text-muted">{game?.name}{set ? ` · ${set.name}` : ""}</p>
+            <p className="text-muted text-xs">
+              {game?.name}
+              {set ? ` · ${set.name}` : ""}
+            </p>
             <h1 className="text-2xl font-semibold tracking-tight">{card.name}</h1>
-            <p className="text-sm text-muted">
+            <p className="text-muted text-sm">
               {card.number ? `#${card.number} · ` : ""}
               {card.rarity ?? "Unknown rarity"} · {card.printing}
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <div className="text-xs text-muted">Market price</div>
-              <div className="text-3xl font-semibold"><Money value={card.current_price} currency={currency} /></div>
+              <div className="text-muted text-xs">Market price</div>
+              <div className="text-3xl font-semibold">
+                <Money value={card.current_price} currency={currency} />
+              </div>
             </div>
             {snap ? (
               <dl className="flex gap-4 text-sm">
-                <div><dt className="text-xs text-muted">Low</dt><dd><Money value={snap.low_price} currency={snap.currency} /></dd></div>
-                <div><dt className="text-xs text-muted">Mid</dt><dd><Money value={snap.mid_price} currency={snap.currency} /></dd></div>
-                <div><dt className="text-xs text-muted">High</dt><dd><Money value={snap.high_price} currency={snap.currency} /></dd></div>
+                <div>
+                  <dt className="text-muted text-xs">Low</dt>
+                  <dd>
+                    <Money value={snap.low_price} currency={snap.currency} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted text-xs">Mid</dt>
+                  <dd>
+                    <Money value={snap.mid_price} currency={snap.currency} />
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted text-xs">High</dt>
+                  <dd>
+                    <Money value={snap.high_price} currency={snap.currency} />
+                  </dd>
+                </div>
               </dl>
             ) : null}
           </div>
@@ -90,13 +124,19 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
             <PriceKindBadge kind={card.current_price_kind} sourceName={source?.name} />
             <FreshnessBadge asOf={card.price_updated_at} staleAfterHours={stale} />
           </div>
-          <p className="text-xs text-subtle">
-            Last price update: {formatDateTime(card.price_updated_at)}{source ? ` · ${source.name}` : ""}
+          <p className="text-subtle text-xs">
+            Last price update: {formatDateTime(card.price_updated_at)}
+            {source ? ` · ${source.name}` : ""}
             {source?.attribution ? ` · ${source.attribution}` : ""}
             {card.tcgplayer_product_id ? (
               <>
                 {" · "}
-                <a className="inline-flex items-center gap-1 hover:text-fg" href={`https://www.tcgplayer.com/product/${card.tcgplayer_product_id}`} target="_blank" rel="noreferrer nofollow">
+                <a
+                  className="hover:text-fg inline-flex items-center gap-1"
+                  href={`https://www.tcgplayer.com/product/${card.tcgplayer_product_id}`}
+                  target="_blank"
+                  rel="noreferrer nofollow"
+                >
                   TCGplayer listing <ExternalLink className="size-3" />
                 </a>
               </>
@@ -108,7 +148,9 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
               {siblings.data.map((s, i) => (
                 <span key={s.id}>
                   {i ? ", " : ""}
-                  <Link href={`/cards/${s.id}`} className="text-accent hover:underline">{s.printing}</Link>{" "}
+                  <Link href={`/cards/${s.id}`} className="text-accent hover:underline">
+                    {s.printing}
+                  </Link>{" "}
                   (<Money value={s.current_price} currency={s.current_price_currency ?? "USD"} />)
                 </span>
               ))}
@@ -116,7 +158,9 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="primary">
-              <Link href={user ? `/collection/add?type=card&item=${card.id}` : `/login?next=${encodeURIComponent(path)}`}>
+              <Link
+                href={user ? `/collection/add?type=card&item=${card.id}` : `/login?next=${encodeURIComponent(path)}`}
+              >
                 <Plus /> Add to collection
               </Link>
             </Button>
@@ -127,16 +171,35 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
       <Card>
         <CardHeader>
           <CardTitle>Price history</CardTitle>
-          <CardDescription>From SealedEV&apos;s stored daily snapshots{card.current_price_kind && card.current_price_kind !== "provider" ? "; includes imported/manual prices" : ""}. Ungraded, near-mint market price.</CardDescription>
+          <CardDescription>
+            From SealedEV&apos;s stored daily snapshots
+            {card.current_price_kind && card.current_price_kind !== "provider"
+              ? "; includes imported/manual prices"
+              : ""}
+            . Ungraded, near-mint market price.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <PriceChart currency={currency} points={history.filter((h) => h.currency === currency).map((h) => ({ t: h.provider_as_of ?? h.captured_at, price: Number(h.market_price), kind: h.source_kind }))} />
+          <PriceChart
+            currency={currency}
+            points={history
+              .filter((h) => h.currency === currency)
+              .map((h) => ({
+                t: h.provider_as_of ?? h.captured_at,
+                price: Number(h.market_price),
+                kind: h.source_kind,
+              }))}
+          />
         </CardContent>
       </Card>
       {profile?.is_admin ? (
         <Card>
-          <CardHeader><CardTitle>Admin: record a manual price</CardTitle></CardHeader>
-          <CardContent><ManualPriceForm kind="card" id={card.id} path={path} /></CardContent>
+          <CardHeader>
+            <CardTitle>Admin: record a manual price</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ManualPriceForm kind="card" id={card.id} path={path} />
+          </CardContent>
         </Card>
       ) : null}
     </div>

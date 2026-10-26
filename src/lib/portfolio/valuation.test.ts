@@ -18,7 +18,9 @@ function lot(partial: Partial<LotInput> & Pick<LotInput, "id" | "quantity" | "un
 
 describe("valueLot", () => {
   it("includes fees and shipping in the cost basis", () => {
-    const v = valueLot(lot({ id: "1", quantity: 2, unitPrice: "100", extraCosts: ["7.50", "12.25", null] }), { now: NOW });
+    const v = valueLot(lot({ id: "1", quantity: 2, unitPrice: "100", extraCosts: ["7.50", "12.25", null] }), {
+      now: NOW,
+    });
     expect(v.costBasis.toString()).toBe("219.75");
     expect(v.unitCostBasis.toString()).toBe("109.875");
     expect(v.marketValue?.toString()).toBe("300");
@@ -42,7 +44,12 @@ describe("valueLot", () => {
 
   it("uses but flags a stale price", () => {
     const v = valueLot(
-      lot({ id: "1", quantity: 1, unitPrice: "10", marketPrice: { amount: "12", currency: "USD", asOf: "2026-08-01T00:00:00Z" } }),
+      lot({
+        id: "1",
+        quantity: 1,
+        unitPrice: "10",
+        marketPrice: { amount: "12", currency: "USD", asOf: "2026-08-01T00:00:00Z" },
+      }),
       { now: NOW },
     );
     expect(v.priceStatus).toBe("stale");
@@ -50,7 +57,9 @@ describe("valueLot", () => {
   });
 
   it("prefers the owner's manual value and refuses cross-currency valuation", () => {
-    const manual = valueLot(lot({ id: "1", quantity: 1, unitPrice: "10", manualUnitValue: { amount: "25" } }), { now: NOW });
+    const manual = valueLot(lot({ id: "1", quantity: 1, unitPrice: "10", manualUnitValue: { amount: "25" } }), {
+      now: NOW,
+    });
     expect(manual.priceStatus).toBe("manual");
     expect(manual.marketValue?.toString()).toBe("25");
     const eur = valueLot(lot({ id: "2", quantity: 1, unitPrice: "10", marketPrice: fresh("12", "EUR") }), { now: NOW });

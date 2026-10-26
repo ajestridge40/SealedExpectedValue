@@ -16,8 +16,15 @@ const manualPrice = z.object({
   kind: z.enum(["sealed", "card"]),
   id: z.string().uuid(),
   path: z.string().startsWith("/").max(300),
-  price: z.string().trim().regex(/^\d{1,10}(\.\d{1,2})?$/, "Enter an amount like 129.99"),
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Use a 3-letter currency code"),
+  price: z
+    .string()
+    .trim()
+    .regex(/^\d{1,10}(\.\d{1,2})?$/, "Enter an amount like 129.99"),
+  currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, "Use a 3-letter currency code"),
   as_of: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().max(500).optional(),
 });
@@ -46,7 +53,9 @@ export async function setManualPrice(_: FormState, formData: FormData): Promise<
       note: v.note || null,
       created_by: user.id,
     },
-    { onConflict: v.kind === "sealed" ? "sealed_product_id,source_id,snapshot_date" : "card_id,source_id,snapshot_date" },
+    {
+      onConflict: v.kind === "sealed" ? "sealed_product_id,source_id,snapshot_date" : "card_id,source_id,snapshot_date",
+    },
   );
   if (error) return { error: error.message };
   revalidatePath(v.path);
@@ -74,7 +83,9 @@ export async function importPriceCsv(_: CsvImportState, formData: FormData): Pro
   if (!source) return { error: "The 'csv_import' data source is missing. Run the seed." };
 
   // Resolve tcgplayer ids to internal ids.
-  const tcgIds = [...new Set(rows.filter((r) => !r.item_id && r.tcgplayer_product_id).map((r) => r.tcgplayer_product_id!))];
+  const tcgIds = [
+    ...new Set(rows.filter((r) => !r.item_id && r.tcgplayer_product_id).map((r) => r.tcgplayer_product_id!)),
+  ];
   const [{ data: prods }, { data: cards }] = await Promise.all([
     supabase.from("sealed_products").select("id, tcgplayer_product_id").in("tcgplayer_product_id", tcgIds),
     supabase.from("cards").select("id, tcgplayer_product_id, printing").in("tcgplayer_product_id", tcgIds),
@@ -86,7 +97,8 @@ export async function importPriceCsv(_: CsvImportState, formData: FormData): Pro
     if (!id && r.item_type === "sealed") id = prods?.find((p) => p.tcgplayer_product_id === r.tcgplayer_product_id)?.id;
     if (!id && r.item_type === "card")
       id = cards?.find(
-        (c) => c.tcgplayer_product_id === r.tcgplayer_product_id && c.printing.toLowerCase() === r.printing.toLowerCase(),
+        (c) =>
+          c.tcgplayer_product_id === r.tcgplayer_product_id && c.printing.toLowerCase() === r.printing.toLowerCase(),
       )?.id;
     if (!id) {
       unresolved.push({ line: i + 2, message: "No catalog item with that id" });
@@ -113,7 +125,9 @@ export async function importPriceCsv(_: CsvImportState, formData: FormData): Pro
   for (const kind of ["sealed", "card"] as const) {
     const batch = snapshots.filter((s) => (kind === "sealed" ? s.sealed_product_id : s.card_id));
     // De-duplicate per item+day (last row wins) so one upsert batch has no conflicts with itself.
-    const unique = [...new Map(batch.map((s) => [`${s.sealed_product_id ?? s.card_id}|${s.snapshot_date}`, s])).values()];
+    const unique = [
+      ...new Map(batch.map((s) => [`${s.sealed_product_id ?? s.card_id}|${s.snapshot_date}`, s])).values(),
+    ];
     if (unique.length === 0) continue;
     const { error } = await supabase.from("price_snapshots").upsert(unique, {
       onConflict: kind === "sealed" ? "sealed_product_id,source_id,snapshot_date" : "card_id,source_id,snapshot_date",
@@ -140,7 +154,9 @@ export async function refreshPricesNow(_: FormState): Promise<FormState> {
     revalidatePath("/", "layout");
     if (report.status === "skipped") return { message: `Skipped: ${report.reason}` };
     const summary = `${report.status}: ${report.snapshotsWritten} prices saved from ${report.setsProcessed} set(s).`;
-    return report.errors.length ? { error: `${summary} Errors: ${report.errors.slice(0, 5).join(" | ")}` } : { message: summary };
+    return report.errors.length
+      ? { error: `${summary} Errors: ${report.errors.slice(0, 5).join(" | ")}` }
+      : { message: summary };
   } catch (err) {
     return { error: (err as Error).message };
   }

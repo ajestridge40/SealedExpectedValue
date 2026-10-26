@@ -9,8 +9,16 @@ import { createClient } from "@/lib/supabase/server";
 import type { FormState } from "./auth";
 
 const profileSchema = z.object({
-  display_name: z.string().trim().max(80).transform((s) => s || null),
-  default_currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Use a 3-letter currency code such as USD"),
+  display_name: z
+    .string()
+    .trim()
+    .max(80)
+    .transform((s) => s || null),
+  default_currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, "Use a 3-letter currency code such as USD"),
   preferred_game_id: z
     .string()
     .uuid()
@@ -41,7 +49,7 @@ export async function updateProfile(_: FormState, formData: FormData): Promise<F
 export async function deleteAccount(_: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser("/settings");
   if (String(formData.get("confirm") ?? "").trim() !== "DELETE") {
-    return { error: 'Type DELETE to confirm.' };
+    return { error: "Type DELETE to confirm." };
   }
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(user.id);

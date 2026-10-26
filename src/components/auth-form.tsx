@@ -19,13 +19,15 @@ export function AuthForm({
   next?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
-  const submit = { signin: "Sign in", signup: "Create account", reset: "Send reset link", update: "Update password" }[mode];
+  const submit = { signin: "Sign in", signup: "Create account", reset: "Send reset link", update: "Update password" }[
+    mode
+  ];
   return (
     <form action={formAction} className="flex flex-col gap-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       {mode !== "update" ? (
         <Field label="Email" htmlFor="email">
-          <Input id="email" name="email" type="email" autoComplete="email" required />
+          <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.email} />
         </Field>
       ) : null}
       {mode !== "reset" ? (
@@ -50,7 +52,7 @@ export function AuthForm({
         </Field>
       ) : null}
       {mode === "signin" ? (
-        <Link href="/forgot-password" className="-mt-2 self-end text-xs text-muted hover:text-fg">
+        <Link href="/forgot-password" className="text-muted hover:text-fg -mt-2 self-end text-xs">
           Forgot password?
         </Link>
       ) : null}

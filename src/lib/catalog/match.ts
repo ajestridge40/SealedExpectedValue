@@ -1,4 +1,10 @@
-import { cleanCardName, isCardProduct, type TcgGroup, type TcgPrice, type TcgProduct } from "../pricing/providers/tcgcsv";
+import {
+  cleanCardName,
+  isCardProduct,
+  type TcgGroup,
+  type TcgPrice,
+  type TcgProduct,
+} from "../pricing/providers/tcgcsv";
 import { safeImageUrl } from "../pricing/types";
 
 /*

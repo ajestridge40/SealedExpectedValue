@@ -20,7 +20,7 @@ export function AuthShell({
         </CardHeader>
         <CardContent>{children}</CardContent>
       </Card>
-      {footer ? <div className="text-center text-sm text-muted">{footer}</div> : null}
+      {footer ? <div className="text-muted text-center text-sm">{footer}</div> : null}
     </div>
   );
 }

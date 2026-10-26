@@ -75,7 +75,10 @@ export function FreshnessBadge({ asOf, staleAfterHours = 72 }: { asOf: string | 
   );
 }
 
-const SOURCE: Record<PullRateSourceType, { label: string; tone: "gain" | "info" | "warn" | "neutral"; icon: typeof Users }> = {
+const SOURCE: Record<
+  PullRateSourceType,
+  { label: string; tone: "gain" | "info" | "warn" | "neutral"; icon: typeof Users }
+> = {
   official: { label: "Official", tone: "gain", icon: BadgeCheck },
   community: { label: "Community estimate", tone: "info", icon: Users },
   user_assumption: { label: "Assumption", tone: "warn", icon: PencilLine },

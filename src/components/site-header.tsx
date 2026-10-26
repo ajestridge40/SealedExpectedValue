@@ -10,7 +10,7 @@ function Logo() {
     <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight" aria-label="SealedEV home">
       <span
         aria-hidden
-        className="grid size-7 place-items-center rounded-md bg-gradient-to-br from-accent to-teal text-[11px] font-bold text-accent-fg"
+        className="from-accent to-teal text-accent-fg grid size-7 place-items-center rounded-md bg-gradient-to-br text-[11px] font-bold"
       >
         EV
       </span>
@@ -25,7 +25,7 @@ export async function SiteHeader() {
   const user = await getUser();
   const profile = user ? await getProfile() : null;
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur">
+    <header className="border-border bg-bg/90 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
         <Logo />
         <NavLinks className="hidden flex-1 md:flex" />

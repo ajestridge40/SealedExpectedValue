@@ -27,7 +27,12 @@ const decimalString = z
 export const priceCsvRowSchema = z
   .object({
     item_type: z.enum(["sealed", "card"]),
-    item_id: z.string().trim().uuid().optional().or(z.literal("").transform(() => undefined)),
+    item_id: z
+      .string()
+      .trim()
+      .uuid()
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
     tcgplayer_product_id: z
       .string()
       .trim()
@@ -35,7 +40,13 @@ export const priceCsvRowSchema = z
       .transform(Number)
       .optional()
       .or(z.literal("").transform(() => undefined)),
-    printing: z.string().trim().max(60).optional().default("Normal").transform((s) => s || "Normal"),
+    printing: z
+      .string()
+      .trim()
+      .max(60)
+      .optional()
+      .default("Normal")
+      .transform((s) => s || "Normal"),
     market_price: decimalString,
     currency: z
       .string()
@@ -80,7 +91,11 @@ export function parsePriceCsv(text: string): ParseResult {
   parsed.data.forEach((raw, i) => {
     const r = priceCsvRowSchema.safeParse(raw);
     if (r.success) rows.push(r.data);
-    else errors.push({ line: i + 2, message: r.error.issues.map((x) => `${x.path.join(".") || "row"}: ${x.message}`).join("; ") });
+    else
+      errors.push({
+        line: i + 2,
+        message: r.error.issues.map((x) => `${x.path.join(".") || "row"}: ${x.message}`).join("; "),
+      });
   });
   return { rows, errors };
 }

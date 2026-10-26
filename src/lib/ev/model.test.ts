@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Decimal } from "../money";
 import { calculateEv } from "./engine";
-import { buildModelInput, selectPoolCards, toPerOccurrence, type CardRow, type EstimateRow, type SlotRow } from "./model";
+import {
+  buildModelInput,
+  selectPoolCards,
+  toPerOccurrence,
+  type CardRow,
+  type EstimateRow,
+  type SlotRow,
+} from "./model";
 
 const base = {
   set_id: "set1",
@@ -49,34 +56,58 @@ describe("selectPoolCards", () => {
   });
 
   it("uses one printing per card when no printing is named", () => {
-    expect(selectPoolCards(cards, ["Common", "Rare"], null).map((x) => x.id).sort()).toEqual([
-      "common-normal",
-      "rare-holo",
-    ]);
+    expect(
+      selectPoolCards(cards, ["Common", "Rare"], null)
+        .map((x) => x.id)
+        .sort(),
+    ).toEqual(["common-normal", "rare-holo"]);
   });
 
   it("applies name filters for pattern variants", () => {
     const pattern = [...cards, c("eevee-mb", "Common", "Normal", 30, 9)];
     pattern[pattern.length - 1].name = "Eevee (Master Ball Pattern)";
-    expect(selectPoolCards(pattern, ["Common"], null, { contains: "master ball" }).map((x) => x.id)).toEqual(["eevee-mb"]);
-    expect(selectPoolCards(pattern, ["Common"], null, { excludes: "pattern" }).map((x) => x.id)).toEqual(["common-normal"]);
+    expect(selectPoolCards(pattern, ["Common"], null, { contains: "master ball" }).map((x) => x.id)).toEqual([
+      "eevee-mb",
+    ]);
+    expect(selectPoolCards(pattern, ["Common"], null, { excludes: "pattern" }).map((x) => x.id)).toEqual([
+      "common-normal",
+    ]);
   });
 
   it("restricts to a named printing", () => {
-    expect(selectPoolCards(cards, ["Common", "Rare"], "Reverse Holofoil").map((x) => x.id).sort()).toEqual([
-      "common-reverse",
-      "rare-reverse",
-    ]);
+    expect(
+      selectPoolCards(cards, ["Common", "Rare"], "Reverse Holofoil")
+        .map((x) => x.id)
+        .sort(),
+    ).toEqual(["common-reverse", "rare-reverse"]);
   });
 });
 
 describe("buildModelInput", () => {
   it("builds engine input from database rows and computes EV", () => {
     const slots: SlotRow[] = [
-      { id: "hit", model_id: "m", name: "Hit slot", kind: "random", occurrences_per_pack: 1, occurrences_per_product: null, position: 1 },
-      { id: "promo", model_id: "m", name: "Promo", kind: "guaranteed", occurrences_per_pack: null, occurrences_per_product: 1, position: 0 },
+      {
+        id: "hit",
+        model_id: "m",
+        name: "Hit slot",
+        kind: "random",
+        occurrences_per_pack: 1,
+        occurrences_per_product: null,
+        position: 1,
+      },
+      {
+        id: "promo",
+        model_id: "m",
+        name: "Promo",
+        kind: "guaranteed",
+        occurrences_per_pack: null,
+        occurrences_per_product: 1,
+        position: 0,
+      },
     ];
-    const est = (e: Partial<EstimateRow> & Pick<EstimateRow, "id" | "slot_id" | "label" | "outcome_kind">): EstimateRow => ({
+    const est = (
+      e: Partial<EstimateRow> & Pick<EstimateRow, "id" | "slot_id" | "label" | "outcome_kind">,
+    ): EstimateRow => ({
       set_id: null,
       card_id: null,
       rarities: null,
@@ -94,11 +125,42 @@ describe("buildModelInput", () => {
       position: 0,
       ...e,
     });
-    const cards = [c("sir1", "SIR", "Holofoil", 100), c("sir2", "SIR", "Holofoil", 50), c("r1", "Rare", "Holofoil", 0.5), c("promo", "Promo", "Normal", 4)];
+    const cards = [
+      c("sir1", "SIR", "Holofoil", 100),
+      c("sir2", "SIR", "Holofoil", 50),
+      c("r1", "Rare", "Holofoil", 0.5),
+      c("promo", "Promo", "Normal", 4),
+    ];
     const estimates: EstimateRow[] = [
-      est({ id: "e1", slot_id: "hit", label: "SIR", outcome_kind: "rarity_pool", rarities: ["SIR"], probability: "0.01", position: 0 }),
-      est({ id: "e2", slot_id: "hit", label: "Rare", outcome_kind: "rarity_pool", rarities: ["Rare"], is_remainder: true, position: 1 }),
-      est({ id: "e3", slot_id: "promo", label: "Promo", outcome_kind: "card", card_id: "promo", probability: "1", probability_basis: "per_box", source_type: "official", source_url: "https://example.com" }),
+      est({
+        id: "e1",
+        slot_id: "hit",
+        label: "SIR",
+        outcome_kind: "rarity_pool",
+        rarities: ["SIR"],
+        probability: "0.01",
+        position: 0,
+      }),
+      est({
+        id: "e2",
+        slot_id: "hit",
+        label: "Rare",
+        outcome_kind: "rarity_pool",
+        rarities: ["Rare"],
+        is_remainder: true,
+        position: 1,
+      }),
+      est({
+        id: "e3",
+        slot_id: "promo",
+        label: "Promo",
+        outcome_kind: "card",
+        card_id: "promo",
+        probability: "1",
+        probability_basis: "per_box",
+        source_type: "official",
+        source_url: "https://example.com",
+      }),
     ];
     const input = buildModelInput({
       model: { id: "m", packs_per_product: 9 },

@@ -45,8 +45,7 @@ export function sum(values: Iterable<Decimal>): Decimal {
 /** Number of minor-unit digits for a currency (JPY 0, USD 2, ...). */
 export function currencyDigits(currency: string): number {
   try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions()
-      .maximumFractionDigits ?? 2;
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
   } catch {
     return 2;
   }

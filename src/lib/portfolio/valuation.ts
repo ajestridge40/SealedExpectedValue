@@ -224,8 +224,7 @@ export function summarize(valuations: LotValuation[]): PortfolioTotals[] {
       sealedQuantity: lots.filter((l) => l.lot.assetType === "sealed").reduce((n, l) => n + l.lot.quantity, 0),
       cardQuantity: lots.filter((l) => l.lot.assetType === "card").reduce((n, l) => n + l.lot.quantity, 0),
       lotCount: lots.length,
-      missingPriceLots: lots.filter((l) => l.priceStatus === "missing" || l.priceStatus === "currency_mismatch")
-        .length,
+      missingPriceLots: lots.filter((l) => l.priceStatus === "missing" || l.priceStatus === "currency_mismatch").length,
       stalePriceLots: lots.filter((l) => l.priceStatus === "stale").length,
       manualPriceLots: lots.filter((l) => l.priceStatus === "manual").length,
     };

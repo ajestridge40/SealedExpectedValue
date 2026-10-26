@@ -27,7 +27,11 @@ const cardSchema = z.object({
   set: z.object({ id: z.string(), name: z.string() }),
   images: z.object({ small: z.string().nullish(), large: z.string().nullish() }).nullish(),
   tcgplayer: z
-    .object({ url: z.string().nullish(), updatedAt: z.string().nullish(), prices: z.record(z.string(), priceBlock).nullish() })
+    .object({
+      url: z.string().nullish(),
+      updatedAt: z.string().nullish(),
+      prices: z.record(z.string(), priceBlock).nullish(),
+    })
     .nullish(),
 });
 
@@ -45,7 +49,11 @@ export const PRINTING_NAMES: Record<string, string> = {
 
 /** Strip anything that could change the meaning of a Lucene-style query. */
 export function sanitizeQueryTerm(text: string): string {
-  return text.replace(/[^\p{L}\p{N}\s'.-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  return text
+    .replace(/[^\p{L}\p{N}\s'.-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
 }
 
 export class PokemonTcgProvider implements PricingProvider {

@@ -29,7 +29,14 @@ export function calculateReturns(input: ReturnsInput): ReturnsResult {
   const costs = decOrNull(input.openingCosts ?? 0) ?? ZERO;
 
   if (price === null || price.lte(0) || costs.isNegative()) {
-    return { status: "invalid_price", purchasePrice: price, totalCost: null, netEv: null, netReturnPct: null, evToPrice: null };
+    return {
+      status: "invalid_price",
+      purchasePrice: price,
+      totalCost: null,
+      netEv: null,
+      netReturnPct: null,
+      evToPrice: null,
+    };
   }
   const totalCost = price.plus(costs);
   if (input.grossEv === null) {
