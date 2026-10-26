@@ -16,7 +16,7 @@ import { runCatalogImport } from "../src/lib/catalog/import.ts";
 import { runSetSync } from "../src/lib/catalog/sync.ts";
 import { runPriceRefresh } from "../src/lib/pricing/refresh.ts";
 import { TcgTrackingProvider } from "../src/lib/pricing/providers/tcgtracking.ts";
-import { SEED_FILE, applyFiles, connect, migrate } from "./db.mts";
+import { SEED_FILE, applyFiles, connect, migrate, reloadApiSchema } from "./db.mts";
 
 const ENV_FILE = join(import.meta.dirname, "..", ".env.local");
 
@@ -123,9 +123,12 @@ try {
 try {
   await migrate(client);
   await applyFiles(client, [SEED_FILE]);
+  await reloadApiSchema(client);
 } finally {
   await client.end();
 }
+// Give the API a moment to pick up new tables before the import uses them.
+await new Promise((r) => setTimeout(r, 3000));
 console.log("✓ Database ready\n");
 
 // --- Catalog and prices ---------------------------------------------------

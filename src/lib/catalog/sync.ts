@@ -16,6 +16,21 @@ import { classifySealed, slugify } from "./product-type";
  * until one is added.
  */
 
+/**
+ * Newest sets first: by release date when known, otherwise by id (TCGplayer
+ * set ids grow over time, so a higher id is a newer set).
+ */
+export function newestFirst(
+  a: { publishedOn: string | null; groupId: number },
+  b: { publishedOn: string | null; groupId: number },
+) {
+  const ta = a.publishedOn ? Date.parse(a.publishedOn) : NaN;
+  const tb = b.publishedOn ? Date.parse(b.publishedOn) : NaN;
+  if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return tb - ta;
+  if (Number.isNaN(ta) !== Number.isNaN(tb)) return Number.isNaN(ta) ? 1 : -1;
+  return b.groupId - a.groupId;
+}
+
 export interface SyncReport {
   games: string[];
   setsCreated: string[];
@@ -55,7 +70,7 @@ export async function runSetSync(
       // Newest first; skip sets announced for the future (presales have no market yet).
       const groups = (await provider.groups(game.tcgplayer_category_id))
         .filter((g) => !g.publishedOn || Date.parse(g.publishedOn) <= now.getTime() + 7 * 86_400_000)
-        .sort((a, b) => (b.publishedOn ?? "").localeCompare(a.publishedOn ?? ""))
+        .sort(newestFirst)
         .slice(0, max);
 
       const { data: existing } = await db.from("sets").select("id, name, tcgplayer_group_id").eq("game_id", game.id);

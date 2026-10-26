@@ -3,7 +3,7 @@
  *   npm run db:setup    # apply pending migrations, then the seed (safe to repeat)
  *   npm run db:seed     # seed only (idempotent)
  */
-import { SEED_FILE, applyFiles, connect, migrate } from "./db.mts";
+import { SEED_FILE, applyFiles, connect, migrate, reloadApiSchema } from "./db.mts";
 
 const mode = process.argv[2];
 const url = process.env.DATABASE_URL;
@@ -16,6 +16,7 @@ const client = await connect(url);
 try {
   if (mode === "setup") await migrate(client);
   await applyFiles(client, [SEED_FILE]);
+  await reloadApiSchema(client);
 } finally {
   await client.end();
 }

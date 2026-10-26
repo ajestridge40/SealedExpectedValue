@@ -14,6 +14,7 @@ import {
   type TcgProduct,
 } from "./providers/tcgtracking";
 import { safeImageUrl } from "./types";
+import { newestFirst } from "../catalog/sync";
 
 // Mocked TCGTracking responses (shapes as returned by /v1/{cat}/sets, /sets/{id}
 // and /sets/{id}/pricing). Ids and prices are test fixtures, not market data.
@@ -144,6 +145,49 @@ describe("TcgTrackingProvider", () => {
     const rows = await p.setPrices(3, 5);
     expect(rows).toEqual([expect.objectContaining({ externalId: "3:5:12345", printing: "Holofoil", market: 1 })]);
     expect(rows[0].asOf?.toISOString()).toBe("2026-10-26T08:00:00.000Z");
+  });
+
+  it("keeps the good entries when some pricing entries are odd", async () => {
+    const f = mockFetch({
+      "/v1/3/sets/7": {
+        products: [
+          { id: 1, name: "A - 001/100", number: "1", rarity: "Rare" },
+          { id: 2, name: "B - 002/100", number: "2", rarity: "Rare" },
+          { id: 3, name: "C Booster Box" },
+        ],
+      },
+      "/v1/3/sets/7/pricing": {
+        updated: 1793000000,
+        prices: {
+          "1": { tcg: { Holofoil: { low: "1.50", market: "2.25" }, "Reverse Holofoil": null, Foil: "n/a" } },
+          "2": { tcg: [] },
+          "3": { tcg: { Normal: { low: null, market: 120 } } },
+          "4": null,
+          oops: { tcg: { Normal: { market: 5 } } },
+          "5": { manapool: { Normal: { market: 9 } } },
+        },
+      },
+    });
+    const p = new TcgTrackingProvider(f, "https://openapi.tcgtracking.com/v1");
+    const rows = await p.setPrices(3, 7);
+    expect(rows.map((r) => [r.externalId, r.printing, r.market, r.low])).toEqual([
+      ["3:7:1", "Holofoil", 2.25, 1.5],
+      ["3:7:3", "Normal", 120, null],
+    ]);
+    expect(rows[0].asOf?.getUTCFullYear()).toBe(2026);
+  });
+
+  it("explains which field broke when the shape is wrong", async () => {
+    const p = new TcgTrackingProvider(
+      mockFetch({ "/v1/3/sets/8/pricing": { data: [] }, "/v1/3/sets/8": { products: [] } }),
+      "https://openapi.tcgtracking.com/v1",
+    );
+    await expect(p.prices(3, 8)).rejects.toThrow(/no "prices" object; keys: data/);
+    const q = new TcgTrackingProvider(
+      mockFetch({ "/v1/3/sets": { sets: [{ id: 1 }] } }),
+      "https://openapi.tcgtracking.com/v1",
+    );
+    await expect(q.groups(3)).rejects.toThrow(/sets\.0\.name/);
   });
 
   it("raises a provider error for unexpected response shapes", async () => {
@@ -333,5 +377,18 @@ describe("CSV", () => {
 
   it("rejects files without required columns", () => {
     expect(parsePriceCsv("foo,bar\n1,2").errors[0].message).toMatch(/Missing column/);
+  });
+});
+
+describe("newestFirst", () => {
+  it("orders by release date, then by set id when dates are missing", () => {
+    const sets = [
+      { groupId: 1422, publishedOn: null },
+      { groupId: 24722, publishedOn: null },
+      { groupId: 23651, publishedOn: "2024-11-08" },
+      { groupId: 23821, publishedOn: "2025-01-17" },
+      { groupId: 24688, publishedOn: null },
+    ];
+    expect(sets.sort(newestFirst).map((s) => s.groupId)).toEqual([23821, 23651, 24722, 24688, 1422]);
   });
 });

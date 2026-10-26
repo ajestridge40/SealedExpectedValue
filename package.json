@@ -22,7 +22,8 @@
     "db:setup": "tsx --env-file-if-exists=.env.local scripts/run-sql.mts setup",
     "prices:refresh:force": "tsx --env-file-if-exists=.env.local scripts/refresh-prices.mts --force",
     "setup": "tsx scripts/setup.mts",
-    "catalog:sync": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts"
+    "catalog:sync": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts",
+    "tcgtracking:check": "tsx scripts/tcgtracking-check.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

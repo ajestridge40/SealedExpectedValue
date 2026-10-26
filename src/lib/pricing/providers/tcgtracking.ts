@@ -38,16 +38,22 @@ export const TCGPLAYER_CATEGORY: Record<string, number> = {
   riftbound: 89,
 };
 
-const setSchema = z.object({
-  id: z.number().int(),
-  name: z.string(),
-  abbreviation: z.string().nullish(),
-  published_on: z.string().nullish(),
-  set_symbol_url: z.string().nullish(),
-});
+const setSchema = z
+  .object({
+    id: z.coerce.number().int(),
+    name: z.string(),
+    abbreviation: z.string().nullish(),
+    // Release date: the documented field is published_on; accept common alternatives.
+    published_on: z.string().nullish(),
+    publishedOn: z.string().nullish(),
+    release_date: z.string().nullish(),
+    released_on: z.string().nullish(),
+    set_symbol_url: z.string().nullish(),
+  })
+  .passthrough();
 
 const productSchema = z.object({
-  id: z.number().int(),
+  id: z.coerce.number().int(),
   name: z.string(),
   clean_name: z.string().nullish(),
   number: z.union([z.string(), z.number()]).nullish(),
@@ -56,15 +62,24 @@ const productSchema = z.object({
   tcgplayer_url: z.string().nullish(),
 });
 
-const priceValueSchema = z.object({ low: z.number().nullish(), market: z.number().nullish() }).passthrough();
-const pricingSchema = z
-  .object({
-    prices: z.record(z.string(), z.object({ tcg: z.record(z.string(), priceValueSchema).nullish() }).passthrough()),
-    updated: z.string().nullish(),
-    updated_at: z.string().nullish(),
-    last_updated: z.string().nullish(),
-  })
-  .passthrough();
+/** A price that may arrive as a number, a numeric string, or be missing. */
+function toPrice(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function toDate(v: unknown): Date | null {
+  if (typeof v === "number" && Number.isFinite(v)) return new Date(v < 1e12 ? v * 1000 : v);
+  if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Date.parse(v))) return new Date(v);
+  return null;
+}
+
+function shapeError(path: string, error: z.ZodError): ProviderError {
+  const issue = error.issues[0];
+  return new ProviderError(
+    `TCGTracking ${path}: unexpected response shape (${issue?.path.join(".") || "root"}: ${issue?.message ?? "invalid"})`,
+  );
+}
 
 /** Internal shapes (shared with the catalog matcher and the refresh planner). */
 export interface TcgGroup {
@@ -172,12 +187,12 @@ export class TcgTrackingProvider implements PricingProvider {
 
   async groups(categoryId: number): Promise<TcgGroup[]> {
     const body = z.object({ sets: z.array(setSchema) }).safeParse(await this.get(`${categoryId}/sets`));
-    if (!body.success) throw new ProviderError(`TCGTracking ${categoryId}/sets: unexpected response shape`);
+    if (!body.success) throw shapeError(`${categoryId}/sets`, body.error);
     return body.data.sets.map((s) => ({
       groupId: s.id,
       name: s.name,
       abbreviation: s.abbreviation || null,
-      publishedOn: s.published_on || null,
+      publishedOn: s.published_on || s.publishedOn || s.release_date || s.released_on || null,
       categoryId,
     }));
   }
@@ -186,7 +201,7 @@ export class TcgTrackingProvider implements PricingProvider {
     const body = z
       .object({ products: z.array(productSchema) })
       .safeParse(await this.get(`${categoryId}/sets/${groupId}`));
-    if (!body.success) throw new ProviderError(`TCGTracking ${categoryId}/sets/${groupId}: unexpected response shape`);
+    if (!body.success) throw shapeError(`${categoryId}/sets/${groupId}`, body.error);
     return body.data.products.map((p) => ({
       productId: tcgplayerIdFromUrl(p.tcgplayer_url) ?? p.id,
       sourceId: p.id,
@@ -212,24 +227,36 @@ export class TcgTrackingProvider implements PricingProvider {
       this.get(`${categoryId}/sets/${groupId}/pricing`),
       this.products(categoryId, groupId),
     ]);
-    const body = pricingSchema.safeParse(raw);
-    if (!body.success)
-      throw new ProviderError(`TCGTracking ${categoryId}/sets/${groupId}/pricing: unexpected response shape`);
-    const stamp = body.data.updated ?? body.data.updated_at ?? body.data.last_updated ?? null;
-    const asOf = stamp && !Number.isNaN(Date.parse(stamp)) ? new Date(stamp) : null;
+    // Parsed entry by entry: one odd entry (a missing or non-numeric price, a
+    // printing without data) must not throw away a whole set's prices.
+    const body = (raw ?? {}) as Record<string, unknown>;
+    const prices = body.prices;
+    if (!prices || typeof prices !== "object" || Array.isArray(prices)) {
+      throw new ProviderError(
+        `TCGTracking ${categoryId}/sets/${groupId}/pricing: unexpected response shape (no "prices" object; keys: ${Object.keys(body).slice(0, 8).join(", ") || "none"})`,
+      );
+    }
+    const asOf = toDate(body.updated ?? body.updated_at ?? body.last_updated ?? null);
     this.asOfBySet.set(`${categoryId}:${groupId}`, asOf);
 
     // Pricing is keyed by TCGTracking's product id; map to the TCGplayer id used everywhere else.
     const idMap = new Map(products.map((p) => [p.sourceId, p.productId]));
     const rows: TcgPrice[] = [];
-    for (const [key, entry] of Object.entries(body.data.prices)) {
+    for (const [key, entry] of Object.entries(prices as Record<string, unknown>)) {
       const sourceId = Number(key);
-      if (!Number.isInteger(sourceId)) continue;
-      for (const [subtype, v] of Object.entries(entry.tcg ?? {})) {
+      if (!Number.isInteger(sourceId) || !entry || typeof entry !== "object") continue;
+      const tcg = (entry as Record<string, unknown>).tcg;
+      if (!tcg || typeof tcg !== "object" || Array.isArray(tcg)) continue;
+      for (const [subtype, v] of Object.entries(tcg as Record<string, unknown>)) {
+        if (!v || typeof v !== "object") continue;
+        const values = v as Record<string, unknown>;
+        const market = toPrice(values.market ?? values.market_price);
+        const low = toPrice(values.low ?? values.low_price);
+        // Kept even without prices: the printing exists and is shown as unpriced.
         rows.push({
           productId: idMap.get(sourceId) ?? sourceId,
-          lowPrice: v.low ?? null,
-          marketPrice: v.market ?? null,
+          lowPrice: low,
+          marketPrice: market,
           subTypeName: subtype || "Normal",
         });
       }

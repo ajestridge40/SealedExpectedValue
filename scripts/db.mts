@@ -85,3 +85,11 @@ export async function migrate(client: pg.Client): Promise<string[]> {
   if (done.length === 0) console.log("  migrations: up to date");
   return done;
 }
+
+/**
+ * Ask Supabase's REST API (PostgREST) to reload its schema cache, so tables
+ * created just now are visible to the API immediately. Harmless elsewhere.
+ */
+export async function reloadApiSchema(client: pg.Client): Promise<void> {
+  await client.query("notify pgrst, 'reload schema'");
+}
