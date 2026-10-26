@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAll, inBatches } from "../data/fetch-all";
 import { TcgTrackingProvider } from "../pricing/providers/tcgtracking";
 import { safeImageUrl } from "../pricing/types";
 import { cardRowsFromGroup, matchGroup, matchSealedProduct } from "./match";
@@ -25,10 +26,10 @@ export async function runCatalogImport(
   const provider = opts.provider ?? new TcgTrackingProvider();
   const report: ImportReport = { setsLinked: [], productsLinked: [], cardsUpserted: 0, needsAttention: [], errors: [] };
 
-  let q = db.from("sets").select("id, name, game_id, tcgplayer_group_id, games!inner(tcgplayer_category_id)");
-  if (opts.setIds?.length) q = q.in("id", opts.setIds);
-  const { data: sets, error } = await q;
-  if (error) throw new Error(error.message);
+  const select = "id, name, game_id, tcgplayer_group_id, games!inner(tcgplayer_category_id)";
+  const sets = opts.setIds?.length
+    ? await inBatches(opts.setIds, (batch) => db.from("sets").select(select).in("id", batch))
+    : await fetchAll((from, to) => db.from("sets").select(select).order("id").range(from, to));
 
   for (const set of sets ?? []) {
     const categoryId = (set.games as unknown as { tcgplayer_category_id: number | null }).tcgplayer_category_id;

@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "../supabase/server";
-import { fetchAll } from "./fetch-all";
+import { fetchAll, inBatches } from "./fetch-all";
 import {
   CARD_COLUMNS,
   PRODUCT_COLUMNS,
@@ -62,8 +62,16 @@ export async function getCardById(id: string): Promise<CardCatalogRow | null> {
 export async function getCardsForSets(setIds: string[]): Promise<CardCatalogRow[]> {
   if (setIds.length === 0) return [];
   const supabase = await createClient();
-  return fetchAll<CardCatalogRow>((from, to) =>
-    supabase.from("cards").select(CARD_COLUMNS).in("set_id", setIds).order("id").range(from, to),
+  // A few sets per batch (each set can have hundreds of cards), paged within each batch.
+  return inBatches<CardCatalogRow, string>(
+    setIds,
+    async (batch) => ({
+      data: await fetchAll<CardCatalogRow>((from, to) =>
+        supabase.from("cards").select(CARD_COLUMNS).in("set_id", batch).order("id").range(from, to),
+      ),
+      error: null,
+    }),
+    20,
   );
 }
 

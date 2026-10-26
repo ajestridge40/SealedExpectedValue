@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { inBatches } from "../data/fetch-all";
 import { TcgTrackingProvider, isCardProduct } from "../pricing/providers/tcgtracking";
 import { safeImageUrl } from "../pricing/types";
 import { runCatalogImport, type ImportReport } from "./import";
@@ -119,14 +120,11 @@ export async function runSetSync(
         const products = (await provider.products(game.tcgplayer_category_id, g.groupId)).filter(
           (p) => !isCardProduct(p),
         );
-        const { data: known } = await db
-          .from("sealed_products")
-          .select("tcgplayer_product_id")
-          .in(
-            "tcgplayer_product_id",
-            products.map((p) => p.productId),
-          );
-        const knownIds = new Set((known ?? []).map((k) => k.tcgplayer_product_id));
+        const known = await inBatches(
+          products.map((p) => p.productId),
+          (batch) => db.from("sealed_products").select("tcgplayer_product_id").in("tcgplayer_product_id", batch),
+        );
+        const knownIds = new Set(known.map((k) => k.tcgplayer_product_id));
         const rows = products.flatMap((p) => {
           if (knownIds.has(p.productId)) return [];
           const kind = classifySealed(p.name);

@@ -7,6 +7,7 @@ import { runCatalogImport } from "@/lib/catalog/import";
 import { runSetSync } from "@/lib/catalog/sync";
 import { TcgTrackingProvider } from "@/lib/pricing/providers/tcgtracking";
 import { config } from "@/lib/env";
+import { inBatches } from "@/lib/data/fetch-all";
 import { parsePriceCsv } from "@/lib/pricing/csv-import";
 import { PokemonTcgProvider } from "@/lib/pricing/providers/pokemontcg";
 import { runPriceRefresh } from "@/lib/pricing/refresh";
@@ -89,8 +90,12 @@ export async function importPriceCsv(_: CsvImportState, formData: FormData): Pro
     ...new Set(rows.filter((r) => !r.item_id && r.tcgplayer_product_id).map((r) => r.tcgplayer_product_id!)),
   ];
   const [{ data: prods }, { data: cards }] = await Promise.all([
-    supabase.from("sealed_products").select("id, tcgplayer_product_id").in("tcgplayer_product_id", tcgIds),
-    supabase.from("cards").select("id, tcgplayer_product_id, printing").in("tcgplayer_product_id", tcgIds),
+    inBatches<{ id: string; tcgplayer_product_id: number }, number>(tcgIds, (b) =>
+      supabase.from("sealed_products").select("id, tcgplayer_product_id").in("tcgplayer_product_id", b),
+    ).then((data) => ({ data })),
+    inBatches<{ id: string; tcgplayer_product_id: number; printing: string }, number>(tcgIds, (b) =>
+      supabase.from("cards").select("id, tcgplayer_product_id, printing").in("tcgplayer_product_id", b),
+    ).then((data) => ({ data })),
   ]);
 
   const unresolved: { line: number; message: string }[] = [];
