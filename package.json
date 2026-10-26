@@ -15,10 +15,13 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
     "db:push": "npx supabase db push",
     "db:reset": "npx supabase db reset",
-    "db:seed": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/seed.sql",
+    "db:seed": "tsx --env-file-if-exists=.env.local scripts/run-sql.mts seed",
     "catalog:import": "tsx --env-file-if-exists=.env.local scripts/import-catalog.mts",
     "prices:refresh": "tsx --env-file-if-exists=.env.local scripts/refresh-prices.mts",
-    "user:make-admin": "tsx --env-file-if-exists=.env.local scripts/make-admin.mts"
+    "user:make-admin": "tsx --env-file-if-exists=.env.local scripts/make-admin.mts",
+    "db:setup": "tsx --env-file-if-exists=.env.local scripts/run-sql.mts setup",
+    "prices:refresh:force": "tsx --env-file-if-exists=.env.local scripts/refresh-prices.mts --force",
+    "setup": "tsx scripts/setup.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -55,6 +58,6 @@
     "vitest": "^5.0.5"
   },
   "engines": {
-    "node": ">=20.9"
+    "node": ">=22.9"
   }
 }

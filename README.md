@@ -58,54 +58,86 @@ built from SealedEV's own daily snapshots.
 
 ## Prerequisites
 
-- Node.js 20.9+ (22 LTS recommended) and npm
-- A Supabase project (free tier works), or Docker for a local Supabase via the Supabase CLI
-- `psql` (optional, for `npm run db:seed` against a hosted database)
+- **Node.js 22 LTS** (22.9 or newer; 24 LTS also works) from [nodejs.org](https://nodejs.org) — includes npm
+- **Git** ([git-scm.com](https://git-scm.com))
+- A free **Supabase** project ([supabase.com](https://supabase.com)) — no Docker or Postgres install needed
 
-## Local setup
+## Run it locally (Windows PowerShell)
 
-```bash
-git clone <this repo> && cd SealedExpectedValue
+These commands work in Windows PowerShell 5.1, PowerShell 7, cmd and macOS/Linux shells. Run them one per line.
+
+**1. Get the code and install dependencies**
+
+```powershell
+git clone -b claude/funny-ramanujan-778slt https://github.com/ajestridge40/SealedExpectedValue.git
+cd SealedExpectedValue
 npm install
-cp .env.example .env.local     # then fill in the values (see below)
 ```
 
-### Option A: hosted Supabase project (simplest)
+> If PowerShell says _“running scripts is disabled on this system”_ when you run `npm`, allow locally created
+> scripts once with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (or type `npm.cmd` instead of `npm`).
 
-1. Create a project at [supabase.com](https://supabase.com). In **Project Settings → API** copy the Project URL,
-   the publishable/anon key and the service-role (secret) key into `.env.local`.
-2. Apply the schema and seed:
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref <your-project-ref>
-   npx supabase db push --include-seed      # applies supabase/migrations + supabase/seed.sql
-   ```
-   Without the CLI: paste `supabase/migrations/20261026000000_init.sql`, then `supabase/seed.sql`, into the SQL
-   editor; or run `psql "$DATABASE_URL" -f <file>` (`npm run db:seed` runs the seed with psql).
-3. Load the catalog and the first prices:
-   ```bash
-   npm run catalog:import     # links sets/products to TCGplayer ids, imports all cards + images
-   npm run prices:refresh -- --force
-   ```
-   Matching is strict (exact normalized names). Anything ambiguous is listed under `needsAttention` with candidate ids;
-   set `sets.tcgplayer_group_id` / `sealed_products.tcgplayer_product_id` by hand and re-run.
-4. `npm run dev` and open http://localhost:3000.
+**2. Create a Supabase project** at [supabase.com/dashboard](https://supabase.com/dashboard) (free plan, pick a database
+password and keep it). When it has finished provisioning, gather four values:
 
-### Option B: local Supabase (Docker)
+| Value                                                     | Where in the Supabase dashboard                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Project URL                                               | **Project Settings → Data API** (looks like `https://abcdefgh.supabase.co`)                                        |
+| Publishable key (`sb_publishable_…`) or legacy `anon` key | **Project Settings → API Keys**                                                                                    |
+| Secret key (`sb_secret_…`) or legacy `service_role` key   | **Project Settings → API Keys** (keep it private)                                                                  |
+| Connection string                                         | **Connect** button (top bar) → **Session pooler** → URI, with `[YOUR-PASSWORD]` replaced by your database password |
 
-```bash
-npx supabase start            # prints the local URL, anon key and service-role key; put them in .env.local
-npx supabase db reset         # applies migrations and seed.sql
-npm run catalog:import && npm run prices:refresh -- --force
+Use the **Session pooler** string: the “Direct connection” host is IPv6-only and fails on many home networks.
+
+**3. Run the setup wizard**
+
+```powershell
+npm run setup
+```
+
+It asks for the four values, writes `.env.local` (git-ignored), creates the tables, Row Level Security policies and
+seed data, then imports the catalog (sets, sealed products, every card, images) and today's prices from TCGCSV. Re-running
+it is safe; delete `.env.local` first if you want to re-enter keys.
+
+**4. Allow local sign-in links.** In Supabase → **Authentication → URL Configuration**, set **Site URL** to
+`http://localhost:3000` and add `http://localhost:3000/auth/callback` under **Redirect URLs**. For quick local testing
+you can instead turn off **Confirm email** (Authentication → Sign In / Providers → Email).
+
+**5. Start the app**
+
+```powershell
 npm run dev
 ```
+
+Open http://localhost:3000, sign up, then make your account an admin (unlocks `/admin`: import, refresh, CSV prices,
+manual prices):
+
+```powershell
+npm run user:make-admin you@example.com
+```
+
+Day to day: `npm run dev` to run the app, `npm run prices:refresh:force` to pull the latest prices (TCGCSV updates once a
+day around 20:00 UTC), `npm run catalog:import` after adding sets or products.
+
+If the import lists items under “needs attention” (no exact TCGplayer name match), set `sets.tcgplayer_group_id` or
+`sealed_products.tcgplayer_product_id` in the Supabase **Table Editor** (the id is the number in
+`tcgplayer.com/product/<id>`) and run `npm run catalog:import` again.
+
+### Other ways to set up the database
+
+- `npm run db:setup` — schema + seed on an empty database, using `DATABASE_URL` from `.env.local`.
+- `npm run db:seed` — re-run only the (idempotent) seed.
+- Supabase CLI: `npx supabase link --project-ref <ref>` then `npx supabase db push --include-seed`.
+- By hand: paste `supabase/migrations/20261026000000_init.sql`, then `supabase/seed.sql`, into the Supabase SQL editor.
+- Fully local Supabase in Docker: `npx supabase start`, then `npx supabase db reset`, and put the printed URL and keys in
+  `.env.local` (plus `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres`).
 
 ### Admin access
 
 Admins can run the import/refresh from `/admin`, upload price CSVs and record manual prices. Sign up in the app, then:
 
 ```bash
-npm run user:make-admin -- you@example.com
+npm run user:make-admin you@example.com
 ```
 
 `profiles.is_admin` cannot be changed by users themselves (column privileges + RLS).
@@ -122,7 +154,7 @@ npm run user:make-admin -- you@example.com
 | `CRON_SECRET`                                                               | **server only** | Bearer token required by `/api/cron/refresh-prices`              |
 | `ENABLE_TCGCSV`, `ENABLE_POKEMONTCG`, `POKEMONTCG_API_KEY`                  | server only     | Provider switches / key                                          |
 | `PRICE_REFRESH_MIN_INTERVAL_HOURS`                                          | server only     | Minimum gap between scheduled refreshes (default 12)             |
-| `DATABASE_URL`                                                              | CLI only        | `npm run db:seed`                                                |
+| `DATABASE_URL`                                                              | CLI only        | `npm run setup`, `db:setup`, `db:seed` (Session pooler string)   |
 
 **Public vs. secret keys.** `NEXT_PUBLIC_*` values are compiled into the browser bundle. The Supabase URL and
 publishable/anon key are designed to be public: every table has Row Level Security, so the anon key can only read the
@@ -174,6 +206,7 @@ lots, cannot make themselves admin, cannot write catalog data, and that account 
 
 ```bash
 DATABASE_TEST_URL=postgres://postgres:postgres@localhost:5432/postgres npm run test:db
+# PowerShell: $env:DATABASE_TEST_URL = "postgres://postgres:postgres@localhost:5432/postgres"; npm run test:db
 ```
 
 CI (`.github/workflows/ci.yml`) runs formatting, lint, type check, all tests (with a PostgreSQL service) and the build.
@@ -181,7 +214,8 @@ CI (`.github/workflows/ci.yml`) runs formatting, lint, type check, all tests (wi
 ## Production build
 
 ```bash
-npm run build && npm start
+npm run build
+npm start
 ```
 
 ## Deploying to Vercel (default)
@@ -191,7 +225,7 @@ npm run build && npm start
    `NEXT_PUBLIC_SITE_URL` to the production URL and generate a long random `CRON_SECRET`.
 3. Apply the migrations and seed to your Supabase project (see Local setup, Option A), and add the production
    `/auth/callback` URL to Supabase's redirect allow list.
-4. Deploy. Then run `npm run catalog:import` and `npm run prices:refresh -- --force` once from your machine with the
+4. Deploy. Then run `npm run catalog:import` and `npm run prices:refresh:force` once from your machine with the
    production env vars (or sign in as an admin and use `/admin`).
 
 **Scheduled refresh.** `vercel.json` defines a daily cron at 21:15 UTC (after TCGCSV's ~20:00 UTC update) that calls
@@ -201,7 +235,9 @@ to 300 s; a refresh of a few sets takes seconds, but check your plan's function 
 Overlapping runs are prevented by a database lock (`start_job`), and runs within `PRICE_REFRESH_MIN_INTERVAL_HOURS` of
 the last success are skipped unless `?force=1`.
 
-Manual trigger: `curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron/refresh-prices?force=1"`.
+Manual trigger (PowerShell):
+`Invoke-RestMethod -Headers @{ Authorization = "Bearer <CRON_SECRET>" } "https://<your-domain>/api/cron/refresh-prices?force=1"`
+(bash: `curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-domain>/api/cron/refresh-prices?force=1"`).
 
 ## AWS (alternative)
 
@@ -250,7 +286,7 @@ The app is a standard Next.js server app; the database stays on Supabase.
 ## Adding a game, set or product
 
 1. Insert the game (with its TCGplayer category id) if needed, then the set and its sealed products (see `seed.sql`).
-2. `npm run catalog:import` to link ids and import the set's cards; `npm run prices:refresh -- --force`.
+2. `npm run catalog:import` to link ids and import the set's cards; `npm run prices:refresh:force`.
 3. Add a pull model: one `product_pull_models` row, its slots and `pull_rate_estimates`, each with an honest
    `source_type`, source name/URL, sample size and verification date. Use `probability = null` for unknown rates rather
    than guessing. `seed.sql` shows complete examples.
