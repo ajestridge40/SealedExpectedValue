@@ -33,6 +33,8 @@ export interface EstimateRow {
   card_id: string | null;
   rarities: string[] | null;
   printing: string | null;
+  name_contains?: string | null;
+  name_excludes?: string | null;
   probability: Num;
   is_remainder: boolean;
   probability_basis: "per_slot" | "per_pack" | "per_box";
@@ -109,9 +111,22 @@ function cardIdentity(c: CardRow): string {
  * one, a single printing per card (base printing preferred) so the same card is
  * never in the pool twice.
  */
-export function selectPoolCards(cards: CardRow[], rarities: string[], printing: string | null): CardRow[] {
+export function selectPoolCards(
+  cards: CardRow[],
+  rarities: string[],
+  printing: string | null,
+  nameFilter: { contains?: string | null; excludes?: string | null } = {},
+): CardRow[] {
   const wanted = new Set(rarities.map((r) => r.toLowerCase()));
-  const matching = cards.filter((c) => c.rarity !== null && wanted.has(c.rarity.toLowerCase()));
+  const contains = nameFilter.contains?.toLowerCase();
+  const excludes = nameFilter.excludes?.toLowerCase();
+  const matching = cards.filter(
+    (c) =>
+      c.rarity !== null &&
+      wanted.has(c.rarity.toLowerCase()) &&
+      (!contains || c.name.toLowerCase().includes(contains)) &&
+      (!excludes || !c.name.toLowerCase().includes(excludes)),
+  );
   if (printing) return matching.filter((c) => c.printing.toLowerCase() === printing.toLowerCase());
   const best = new Map<string, CardRow>();
   for (const c of matching) {
@@ -189,7 +204,10 @@ export function buildModelInput(args: {
           }
           const setId = e.set_id ?? args.productSetId;
           const pool = setId
-            ? selectPoolCards(args.cardsBySet.get(setId) ?? [], e.rarities ?? [], e.printing).map(toCardRef)
+            ? selectPoolCards(args.cardsBySet.get(setId) ?? [], e.rarities ?? [], e.printing, {
+                contains: e.name_contains,
+                excludes: e.name_excludes,
+              }).map(toCardRef)
             : [];
           return {
             id: e.id,

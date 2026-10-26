@@ -231,11 +231,11 @@ create table public.price_snapshots (
 );
 
 -- One snapshot per item, source and day: re-running a refresh updates rather
--- than duplicates.
-create unique index price_snapshots_product_day_idx
-  on public.price_snapshots (sealed_product_id, source_id, snapshot_date) where sealed_product_id is not null;
-create unique index price_snapshots_card_day_idx
-  on public.price_snapshots (card_id, source_id, snapshot_date) where card_id is not null;
+-- than duplicates. (NULLs are distinct, so card rows never collide on the
+-- product constraint and vice versa.)
+alter table public.price_snapshots
+  add constraint price_snapshots_product_day_key unique (sealed_product_id, source_id, snapshot_date),
+  add constraint price_snapshots_card_day_key unique (card_id, source_id, snapshot_date);
 create index price_snapshots_product_time_idx on public.price_snapshots (sealed_product_id, captured_at desc);
 create index price_snapshots_card_time_idx on public.price_snapshots (card_id, captured_at desc);
 
@@ -337,6 +337,10 @@ create table public.pull_rate_estimates (
   -- Restrict a pool to one printing (e.g. 'Reverse Holofoil'). When null the
   -- engine uses one printing per card (see docs/EV_METHODOLOGY.md).
   printing text,
+  -- Optional case-insensitive name filters for pools, e.g. pattern variants
+  -- listed as separate products ("Eevee (Master Ball Pattern)").
+  name_contains text,
+  name_excludes text,
   -- Null = unknown. is_remainder = "whatever probability the other outcomes
   -- in this slot leave over" (only valid when all of them are known).
   probability numeric(16, 12) check (probability is null or probability >= 0),

@@ -55,6 +55,13 @@ describe("selectPoolCards", () => {
     ]);
   });
 
+  it("applies name filters for pattern variants", () => {
+    const pattern = [...cards, c("eevee-mb", "Common", "Normal", 30, 9)];
+    pattern[pattern.length - 1].name = "Eevee (Master Ball Pattern)";
+    expect(selectPoolCards(pattern, ["Common"], null, { contains: "master ball" }).map((x) => x.id)).toEqual(["eevee-mb"]);
+    expect(selectPoolCards(pattern, ["Common"], null, { excludes: "pattern" }).map((x) => x.id)).toEqual(["common-normal"]);
+  });
+
   it("restricts to a named printing", () => {
     expect(selectPoolCards(cards, ["Common", "Rare"], "Reverse Holofoil").map((x) => x.id).sort()).toEqual([
       "common-reverse",
