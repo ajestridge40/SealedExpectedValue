@@ -1,132 +1,165 @@
 import { describe, expect, it, vi } from "vitest";
-import { cardRowsFromGroup, matchGroup, matchSealedProduct, normalizeName } from "../catalog/match";
+import { cardRowsFromSet, matchSealedProduct, matchSet, normalizeName } from "../catalog/match";
 import { escapeCsvCell, toCsv } from "../csv";
 import { parsePriceCsv } from "./csv-import";
 import { fetchJson } from "./http";
 import { planSnapshots } from "./plan";
-import { PokemonTcgProvider, sanitizeQueryTerm } from "./providers/pokemontcg";
-import { TcgcsvProvider, cleanCardName } from "./providers/tcgcsv";
+import { TcgApiProvider, cleanCardName } from "./providers/tcgapi";
 import { safeImageUrl } from "./types";
 
-// Mocked provider responses. Ids and prices are test fixtures, not market data.
-const GROUPS = {
-  success: true,
-  errors: [],
-  results: [
-    {
-      groupId: 9001,
-      name: "SV08: Test Sparks",
-      abbreviation: "SV08",
-      publishedOn: "2024-11-08T00:00:00",
-      categoryId: 3,
-    },
-    { groupId: 9002, name: "SV08: Test Sparks Promos", abbreviation: null, publishedOn: null, categoryId: 3 },
-  ],
-};
-const PRODUCTS = {
-  success: true,
-  errors: [],
-  results: [
-    {
-      productId: 1,
-      name: "Test Sparks Booster Box",
-      imageUrl: "https://tcgplayer-cdn.tcgplayer.com/product/1_200w.jpg",
-      categoryId: 3,
-      groupId: 9001,
-      url: null,
-      extendedData: [],
-    },
-    {
-      productId: 2,
-      name: "Test Sparks Booster Box Case",
-      imageUrl: null,
-      categoryId: 3,
-      groupId: 9001,
-      url: null,
-      extendedData: [],
-    },
-    {
-      productId: 3,
-      name: "Testachu ex - 238/191",
-      imageUrl: "https://evil.example.com/x.jpg",
-      categoryId: 3,
-      groupId: 9001,
-      url: null,
-      extendedData: [
-        { name: "Number", value: "238/191" },
-        { name: "Rarity", value: "Special Illustration Rare" },
-      ],
-    },
-  ],
-};
-const PRICES = {
-  success: true,
-  errors: [],
-  results: [
-    { productId: 1, lowPrice: 1, midPrice: 2, highPrice: 3, marketPrice: 2.5, subTypeName: "Normal" },
-    { productId: 3, lowPrice: 1, midPrice: 2, highPrice: 3, marketPrice: 9.99, subTypeName: "Holofoil" },
-    {
-      productId: 3,
-      lowPrice: null,
-      midPrice: null,
-      highPrice: null,
-      marketPrice: null,
-      subTypeName: "Reverse Holofoil",
-    },
-  ],
-};
+// Mocked TCG API responses. Ids and prices are test fixtures, not market data.
+const RATE = { daily_limit: 100, daily_remaining: 93, daily_reset: "2026-10-27T00:00:00.000Z" };
+const SETS = [
+  { id: 501, name: "SV08: Test Sparks", tcgplayer_id: 9001, abbreviation: "SV08", release_date: "2024-11-08" },
+  { id: 502, name: "SV08: Test Sparks Promos", tcgplayer_id: 9002, abbreviation: null, release_date: null },
+];
+const CARDS = [
+  {
+    id: 7001,
+    name: "Testachu ex - 238/191",
+    clean_name: "Testachu ex 238 191",
+    number: "238/191",
+    rarity: "Special Illustration Rare",
+    tcgplayer_id: 3,
+    product_type: "Cards",
+    printing: "Holofoil",
+    market_price: 9.99,
+    low_price: 8,
+    median_price: 9.5,
+    price_updated_at: "2026-10-26T06:00:00Z",
+    image_url: "https://evil.example.com/x.jpg",
+  },
+  {
+    id: 7002,
+    name: "Testmon",
+    number: "001/191",
+    rarity: "Common",
+    tcgplayer_id: 4,
+    product_type: "Cards",
+    printing: "Normal",
+    market_price: 0.05,
+    price_updated_at: "2026-10-26T06:00:00Z",
+    image_url: "https://tcgplayer-cdn.tcgplayer.com/product/4_200w.jpg",
+  },
+];
+const SEALED = [
+  {
+    id: 8001,
+    name: "Test Sparks Booster Box",
+    tcgplayer_id: 1,
+    product_type: "Sealed Products",
+    printing: "Normal",
+    market_price: 150.5,
+    price_updated_at: "2026-10-26T06:00:00Z",
+    image_url: "https://tcgplayer-cdn.tcgplayer.com/product/1_200w.jpg",
+  },
+  { id: 8002, name: "Test Sparks Booster Box Case", tcgplayer_id: 2, printing: "Normal", market_price: 900 },
+];
+const SET_PRICES = [
+  { card_id: 7001, tcgplayer_id: 3, printing: "Holofoil", market_price: 9.99, last_updated_at: "2026-10-26T06:00:00Z" },
+  { card_id: 7002, tcgplayer_id: 4, printing: "Normal", market_price: 0.05, last_updated_at: "2026-10-26T06:00:00Z" },
+  {
+    card_id: 7002,
+    tcgplayer_id: 4,
+    printing: "Reverse Holofoil",
+    market_price: 0.25,
+    last_updated_at: "2026-10-26T06:00:00Z",
+  },
+  { card_id: 8001, tcgplayer_id: 1, printing: "Normal", market_price: 150.5, last_updated_at: "2026-10-26T06:00:00Z" },
+];
 
-function mockFetch(routes: Record<string, unknown>) {
-  return vi.fn(async (input: string | URL | Request) => {
-    const url = String(input);
-    const key = Object.keys(routes).find((k) => url.endsWith(k));
-    if (!key) return new Response("not found", { status: 404 });
-    const body = routes[key];
-    return typeof body === "string" ? new Response(body) : Response.json(body);
+const ok = (data: unknown, meta?: unknown) => Response.json({ data, meta, rate_limit: RATE });
+
+function mockApi(opts: { setPricesStatus?: number } = {}) {
+  return vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const key = (init?.headers as Record<string, string>)?.["X-API-Key"];
+    if (key !== "test-key-0123456789") return Response.json({ error: { message: "bad key" } }, { status: 401 });
+    const path = url.pathname.replace("/v1", "");
+    if (path === "/games/3/sets") return ok(SETS, { total: 2, has_more: false });
+    if (path === "/sets/501/cards") {
+      const type = url.searchParams.get("type");
+      if (type === "Sealed Products") return ok(SEALED, { total: 2, has_more: false });
+      // two pages of cards to exercise pagination
+      return url.searchParams.get("page") === "1"
+        ? ok([CARDS[0]], { total: 2, has_more: true })
+        : ok([CARDS[1]], { total: 2, has_more: false });
+    }
+    if (path === "/sets/501/prices") {
+      return opts.setPricesStatus
+        ? Response.json({ error: { message: "Upgrade" } }, { status: opts.setPricesStatus })
+        : ok(SET_PRICES);
+    }
+    if (path === "/cards/7002/prices") return ok(SET_PRICES.filter((r) => r.card_id === 7002));
+    if (path === "/cards/7002/history")
+      return ok([{ date: "2026-10-20", printing: "Normal", market_price: 0.04, low_price: 0.01 }]);
+    return Response.json({ error: { message: "not found" } }, { status: 404 });
   }) as unknown as typeof fetch;
 }
 
-const tcgRoutes = {
-  "/tcgplayer/3/groups": GROUPS,
-  "/tcgplayer/3/9001/products": PRODUCTS,
-  "/tcgplayer/3/9001/prices": PRICES,
-  "/last-updated.txt": "2026-10-25T20:05:00+0000",
-};
+const calls = (f: typeof fetch) =>
+  (f as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => new URL(String(c[0])).pathname);
 
-describe("TcgcsvProvider", () => {
-  it("normalizes sets, products, cards and prices from mocked responses", async () => {
-    const fetchImpl = mockFetch(tcgRoutes);
-    const p = new TcgcsvProvider(fetchImpl);
-    const sets = await p.listSets("pokemon");
-    expect(sets[0]).toMatchObject({ externalId: "3:9001", name: "SV08: Test Sparks", releaseDate: "2024-11-08" });
+describe("TcgApiProvider", () => {
+  it("sends the API key, pages through results and records the rate limit", async () => {
+    const f = mockApi();
+    const p = new TcgApiProvider("test-key-0123456789", f);
+    const cards = await p.setCards(501, "Cards");
+    expect(cards.map((c) => c.id)).toEqual([7001, 7002]);
+    expect(p.rateLimit?.daily_remaining).toBe(93);
+    const sets = await p.listSets(3);
+    expect(sets[0]).toMatchObject({ externalId: "501", name: "SV08: Test Sparks", releaseDate: "2024-11-08" });
+    // cached: a second call does not hit the API again
+    await p.setCards(501, "Cards");
+    expect(calls(f).filter((c) => c.endsWith("/sets/501/cards")).length).toBe(2);
+  });
 
-    const sealed = await p.searchProducts({ game: "pokemon", setExternalId: "3:9001" });
-    expect(sealed.map((s) => s.externalId)).toEqual(["3:9001:1", "3:9001:2"]);
+  it("returns every printing when the plan includes set prices", async () => {
+    const p = new TcgApiProvider("test-key-0123456789", mockApi());
+    const { prices, allPrintings } = await p.setPrices(501);
+    expect(allPrintings).toBe(true);
+    expect(prices.map((x) => [x.externalId, x.printing, x.market])).toContainEqual(["4", "Reverse Holofoil", 0.25]);
+    expect(prices[0].asOf?.toISOString()).toBe("2026-10-26T06:00:00.000Z");
+  });
 
-    const cards = await p.searchCards({ game: "pokemon", setExternalId: "3:9001", text: "testachu" });
-    expect(cards[0]).toMatchObject({
-      name: "Testachu ex",
-      number: "238/191",
-      printings: ["Holofoil", "Reverse Holofoil"],
-    });
-
-    const price = await p.getCurrentProductPrice("3:9001:1");
-    expect(price).toMatchObject({ market: 2.5, currency: "USD" });
-    expect(price?.asOf?.toISOString()).toBe("2026-10-25T20:05:00.000Z");
-
-    const cardPrices = await p.getCurrentCardPrice("3:9001:3");
-    expect(cardPrices.map((x) => [x.printing, x.market])).toEqual([
-      ["Holofoil", 9.99],
-      ["Reverse Holofoil", null],
+  it("falls back to primary printings on plans without set prices (403)", async () => {
+    const f = mockApi({ setPricesStatus: 403 });
+    const p = new TcgApiProvider("test-key-0123456789", f);
+    const { prices, allPrintings } = await p.setPrices(501);
+    expect(allPrintings).toBe(false);
+    expect(p.setPricesAvailable).toBe(false);
+    expect(prices.map((x) => [x.externalId, x.printing, x.market])).toEqual([
+      ["3", "Holofoil", 9.99],
+      ["4", "Normal", 0.05],
+      ["1", "Normal", 150.5],
+      ["2", "Normal", 900],
     ]);
-    // Responses are cached per provider instance: products fetched once.
-    const calls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
-    expect(calls.filter((u) => u.endsWith("/products")).length).toBe(1);
+    // does not retry the forbidden endpoint for the next set
+    expect(await p.setPriceRows(501)).toBeNull();
+    expect(calls(f).filter((c) => c.endsWith("/prices")).length).toBe(1);
+  });
+
+  it("explains a bad key and a missing key", async () => {
+    const p = new TcgApiProvider("wrong-key-0123456789", mockApi());
+    await expect(p.setCards(501, "Cards")).rejects.toThrow(/rejected the API key/);
+    const none = new TcgApiProvider("", mockApi());
+    expect(none.configured).toBe(false);
+    await expect(none.setCards(501, "Cards")).rejects.toThrow(/TCGAPI_KEY is not set/);
+  });
+
+  it("reads card prices and history", async () => {
+    const p = new TcgApiProvider("test-key-0123456789", mockApi());
+    const prices = await p.getCurrentCardPrice("7002");
+    expect(prices.map((x) => x.printing)).toEqual(["Normal", "Reverse Holofoil"]);
+    const hist = await p.getPriceHistory("7002");
+    expect(hist[0]).toMatchObject({ market: 0.04, printing: "Normal" });
+    expect(await p.getCurrentCardPrice("../etc")).toEqual([]);
   });
 
   it("raises a provider error for unexpected response shapes", async () => {
-    const p = new TcgcsvProvider(mockFetch({ "/tcgplayer/3/groups": { results: [{ nope: true }] } }));
-    await expect(p.listSets("pokemon")).rejects.toThrow(/unexpected response/);
+    const f = vi.fn(async () => Response.json({ data: [{ nope: true }] })) as unknown as typeof fetch;
+    const p = new TcgApiProvider("test-key-0123456789", f);
+    await expect(p.setCards(1, "Cards")).rejects.toThrow(/unexpected response/);
   });
 
   it("cleans card names", () => {
@@ -136,73 +169,47 @@ describe("TcgcsvProvider", () => {
   });
 });
 
-describe("PokemonTcgProvider", () => {
-  it("maps printings and update dates", async () => {
-    const card = {
-      id: "test1-1",
-      name: "Testmon",
-      number: "1",
-      rarity: "Rare",
-      set: { id: "test1", name: "Test" },
-      images: {
-        small: "https://images.pokemontcg.io/test1/1.png",
-        large: "https://images.pokemontcg.io/test1/1_hires.png",
-      },
-      tcgplayer: {
-        url: null,
-        updatedAt: "2026/10/24",
-        prices: { holofoil: { market: 3.21 }, reverseHolofoil: { market: 1.5 } },
-      },
-    };
-    const p = new PokemonTcgProvider(undefined, mockFetch({ "/cards/test1-1": { data: card } }));
-    const prices = await p.getCurrentCardPrice("test1-1");
-    expect(prices.map((x) => [x.printing, x.market])).toEqual([
-      ["Holofoil", 3.21],
-      ["Reverse Holofoil", 1.5],
-    ]);
-    expect(prices[0].asOf?.toISOString()).toBe("2026-10-24T00:00:00.000Z");
-    expect(await p.getCardDetails("../../etc")).toBeNull();
-  });
-
-  it("sanitizes query terms", () => {
-    expect(sanitizeQueryTerm('pika" OR set.id:*')).toBe("pika OR set.id");
-  });
-});
-
 describe("fetchJson", () => {
   it("refuses hosts outside the provider allowlist", async () => {
     await expect(fetchJson("https://169.254.169.254/latest/meta-data")).rejects.toThrow(/non-allowlisted/);
-    await expect(fetchJson("http://tcgcsv.com/x")).rejects.toThrow(/non-allowlisted/);
+    await expect(fetchJson("http://api.tcgapi.dev/v1/games")).rejects.toThrow(/non-allowlisted/);
   });
 
   it("retries once on a 5xx response", async () => {
     let n = 0;
     const f = vi.fn(async () => (++n === 1 ? new Response("x", { status: 503 }) : Response.json({ ok: 1 })));
     await expect(
-      fetchJson("https://tcgcsv.com/retry", { fetchImpl: f as unknown as typeof fetch, minIntervalMs: 0 }),
+      fetchJson("https://api.tcgapi.dev/v1/retry", { fetchImpl: f as unknown as typeof fetch, minIntervalMs: 0 }),
     ).resolves.toEqual({ ok: 1 });
     expect(f).toHaveBeenCalledTimes(2);
   }, 10_000);
 });
 
 describe("catalog matching", () => {
-  it("matches sets and sealed products strictly", () => {
+  it("matches sets by TCGplayer id or exact name, and sealed products strictly", () => {
     expect(normalizeName("Scarlet & Violet—Surging Sparks")).toBe("scarlet and violet surging sparks");
-    expect(matchGroup("Test Sparks", GROUPS.results).match?.groupId).toBe(9001);
-    expect(matchGroup("Scarlet & Violet—Test Sparks", GROUPS.results).match?.groupId).toBe(9001);
-    expect(matchGroup("Unknown Set", GROUPS.results).match).toBeNull();
-    expect(matchSealedProduct("Test Sparks Booster Box", PRODUCTS.results).match?.productId).toBe(1);
-    const miss = matchSealedProduct("Test Sparks Elite Trainer Box", PRODUCTS.results);
+    expect(matchSet({ name: "Test Sparks" }, SETS).match?.id).toBe(501);
+    expect(matchSet({ name: "Scarlet & Violet—Test Sparks" }, SETS).match?.id).toBe(501);
+    expect(matchSet({ name: "Renamed", tcgplayerGroupId: 9002 }, SETS).match?.id).toBe(502);
+    expect(matchSet({ name: "Unknown Set" }, SETS).match).toBeNull();
+    expect(matchSealedProduct("Test Sparks Booster Box", SEALED).match?.id).toBe(8001);
+    const miss = matchSealedProduct("Test Sparks Elite Trainer Box", SEALED);
     expect(miss.match).toBeNull();
     expect(miss.candidates.length).toBeGreaterThan(0);
   });
 
-  it("creates one card row per priced printing and drops unsafe image hosts", () => {
-    const rows = cardRowsFromGroup(PRODUCTS.results, PRICES.results);
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.printing)).toEqual(["Holofoil", "Reverse Holofoil"]);
-    expect(rows[0].image_url).toBeNull();
-    expect(safeImageUrl("https://tcgplayer-cdn.tcgplayer.com/product/1_200w.jpg")).not.toBeNull();
+  it("creates one card row per printing and drops unsafe image hosts", () => {
+    const all = cardRowsFromSet(CARDS, SET_PRICES);
+    expect(all.map((r) => [r.name, r.printing])).toEqual([
+      ["Testachu ex", "Holofoil"],
+      ["Testmon", "Normal"],
+      ["Testmon", "Reverse Holofoil"],
+    ]);
+    expect(all[0].image_url).toBeNull();
+    expect(all[1].image_url).not.toBeNull();
+    expect(all[0].tcgapi_id).toBe(7001);
+    // without set prices: primary printing only
+    expect(cardRowsFromSet(CARDS, null).map((r) => r.printing)).toEqual(["Holofoil", "Normal"]);
     expect(safeImageUrl("javascript:alert(1)")).toBeNull();
   });
 });

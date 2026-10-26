@@ -1,10 +1,9 @@
 /**
- * Apply SQL files to DATABASE_URL with node-postgres (no psql needed; works the
- * same in PowerShell, cmd and bash).
- *   npm run db:seed     # supabase/seed.sql (idempotent)
- *   npm run db:setup    # migrations + seed, for a brand-new database only
+ * Database helpers that need no psql (work the same in PowerShell, cmd, bash):
+ *   npm run db:setup    # apply pending migrations, then the seed (safe to repeat)
+ *   npm run db:seed     # seed only (idempotent)
  */
-import { SEED_FILE, applyFiles, connect, migrationFiles, schemaExists } from "./db.mts";
+import { SEED_FILE, applyFiles, connect, migrate } from "./db.mts";
 
 const mode = process.argv[2];
 const url = process.env.DATABASE_URL;
@@ -15,15 +14,8 @@ if (!url) {
 
 const client = await connect(url);
 try {
-  if (mode === "setup") {
-    if (await schemaExists(client)) {
-      console.error("The schema already exists. Use `npm run db:seed` to re-run the seed only.");
-      process.exit(1);
-    }
-    await applyFiles(client, [...migrationFiles(), SEED_FILE]);
-  } else {
-    await applyFiles(client, [SEED_FILE]);
-  }
+  if (mode === "setup") await migrate(client);
+  await applyFiles(client, [SEED_FILE]);
 } finally {
   await client.end();
 }

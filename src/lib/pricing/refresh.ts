@@ -1,18 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "../data/fetch-all";
 import { planSnapshots, type SnapshotRow, type TrackedCard, type TrackedProduct } from "./plan";
-import { PokemonTcgProvider } from "./providers/pokemontcg";
-import { TcgcsvProvider } from "./providers/tcgcsv";
+import { TcgApiProvider } from "./providers/tcgapi";
 
 /*
- * Scheduled price refresh. Takes a service-role client (no "server-only"
- * import, so the CLI script can use it too).
+ * Scheduled price refresh from TCG API. Takes a service-role client (no
+ * "server-only" import, so the CLI script can use it too).
  *
  * - Holds a job lock (job_runs) so overlapping cron/manual runs do not race.
- * - Skips if a successful run finished recently, unless forced: TCGCSV only
- *   updates once a day, so calling it more often wastes its bandwidth.
- * - One request per set to TCGCSV. Provider failures are recorded and the
- *   last known prices are left untouched.
+ * - Skips if a successful run finished recently, unless forced: TCG API prices
+ *   update about once a day and plans are metered per day.
+ * - Per set: one request on plans with /sets/{id}/prices (every printing),
+ *   otherwise two or three (primary printing of cards + sealed products).
+ * - Provider failures are recorded and the last known prices are left
+ *   untouched. Hitting the daily limit stops the run early.
  */
 
 export interface RefreshReport {
@@ -22,6 +23,9 @@ export interface RefreshReport {
   snapshotsWritten: number;
   unpricedProducts: number;
   unpricedCards: number;
+  /** False when the plan only exposes each card's primary printing (other printings stay unpriced). */
+  allPrintings?: boolean;
+  requestsRemainingToday?: number | null;
   errors: string[];
   startedAt: string;
   finishedAt: string;
@@ -34,8 +38,7 @@ export async function runPriceRefresh(
   opts: {
     force?: boolean;
     minIntervalHours?: number;
-    tcgcsv?: TcgcsvProvider | null;
-    pokemontcg?: PokemonTcgProvider | null;
+    provider?: TcgApiProvider;
     now?: () => Date;
   } = {},
 ): Promise<RefreshReport> {
@@ -51,6 +54,15 @@ export async function runPriceRefresh(
     startedAt: startedAt.toISOString(),
     finishedAt: startedAt.toISOString(),
   };
+
+  const provider = opts.provider ?? new TcgApiProvider();
+  if (!provider.configured) {
+    return {
+      ...report,
+      status: "failed",
+      errors: ["TCGAPI_KEY is not set. Get a free key at https://tcgapi.dev/dashboard and add it to .env.local."],
+    };
+  }
 
   if (!opts.force) {
     const { data: last } = await db
@@ -72,86 +84,49 @@ export async function runPriceRefresh(
   if (runId === null) return { ...report, status: "skipped", reason: "Another refresh is already running." };
 
   try {
-    const { data: sources, error } = await db.from("data_sources").select("id, slug");
+    const { data: source, error } = await db.from("data_sources").select("id").eq("slug", "tcgapi").maybeSingle();
     if (error) throw new Error(error.message);
-    const sourceId = (slug: string) => sources?.find((s) => s.slug === slug)?.id as string | undefined;
+    if (!source) throw new Error("The 'tcgapi' data source is missing. Run `npm run db:seed`.");
 
-    const tcgcsv = opts.tcgcsv === undefined ? new TcgcsvProvider() : opts.tcgcsv;
-    if (tcgcsv && sourceId("tcgcsv")) {
-      const { data: sets, error: setErr } = await db
-        .from("sets")
-        .select("id, name, tcgplayer_group_id, games!inner(tcgplayer_category_id)")
-        .not("tcgplayer_group_id", "is", null);
-      if (setErr) throw new Error(setErr.message);
+    const { data: sets, error: setErr } = await db
+      .from("sets")
+      .select("id, name, tcgapi_set_id")
+      .not("tcgapi_set_id", "is", null);
+    if (setErr) throw new Error(setErr.message);
+    if (!sets?.length) report.errors.push("No sets are linked to TCG API yet. Run the catalog import first.");
 
-      for (const set of sets ?? []) {
-        const game = set.games as unknown as { tcgplayer_category_id: number | null };
-        if (!game?.tcgplayer_category_id) continue;
-        try {
-          const prices = await tcgcsv.setPrices(game.tcgplayer_category_id, set.tcgplayer_group_id as number);
-          const products = await fetchAll<TrackedProduct>((f, t) =>
-            db
-              .from("sealed_products")
-              .select("id, tcgplayer_product_id")
-              .eq("set_id", set.id)
-              .not("tcgplayer_product_id", "is", null)
-              .range(f, t),
-          );
-          const cards = await fetchAll<TrackedCard>((f, t) =>
-            db
-              .from("cards")
-              .select("id, tcgplayer_product_id, printing")
-              .eq("set_id", set.id)
-              .not("tcgplayer_product_id", "is", null)
-              .order("id")
-              .range(f, t),
-          );
-          const plan = planSnapshots({ products, cards, prices, sourceId: sourceId("tcgcsv")!, capturedAt: startedAt });
-          report.snapshotsWritten += await writeSnapshots(db, plan.rows);
-          report.unpricedProducts += plan.unpricedProducts.length;
-          report.unpricedCards += plan.unpricedCards.length;
-          report.setsProcessed++;
-        } catch (err) {
-          report.errors.push(`${set.name}: ${(err as Error).message}`);
-        }
+    for (const set of sets ?? []) {
+      try {
+        const { prices, allPrintings } = await provider.setPrices(set.tcgapi_set_id as number);
+        report.allPrintings = (report.allPrintings ?? true) && allPrintings;
+        const products = await fetchAll<TrackedProduct>((f, t) =>
+          db
+            .from("sealed_products")
+            .select("id, tcgplayer_product_id")
+            .eq("set_id", set.id)
+            .not("tcgplayer_product_id", "is", null)
+            .range(f, t),
+        );
+        const cards = await fetchAll<TrackedCard>((f, t) =>
+          db
+            .from("cards")
+            .select("id, tcgplayer_product_id, printing")
+            .eq("set_id", set.id)
+            .not("tcgplayer_product_id", "is", null)
+            .order("id")
+            .range(f, t),
+        );
+        const plan = planSnapshots({ products, cards, prices, sourceId: source.id, capturedAt: startedAt });
+        report.snapshotsWritten += await writeSnapshots(db, plan.rows);
+        report.unpricedProducts += plan.unpricedProducts.length;
+        report.unpricedCards += plan.unpricedCards.length;
+        report.setsProcessed++;
+      } catch (err) {
+        report.errors.push(`${set.name}: ${(err as Error).message}`);
+        if (/429|daily request limit|401/.test((err as Error).message)) break;
       }
     }
-
-    // Secondary: Pokémon cards linked only to pokemontcg.io.
-    const ptcg = opts.pokemontcg ?? null;
-    if (ptcg && sourceId("pokemontcg_io")) {
-      const { data: cards } = await db
-        .from("cards")
-        .select("id, pokemontcg_id, printing")
-        .is("tcgplayer_product_id", null)
-        .not("pokemontcg_id", "is", null)
-        .limit(200);
-      const rows: SnapshotRow[] = [];
-      for (const card of cards ?? []) {
-        try {
-          const prices = await ptcg.getCurrentCardPrice(card.pokemontcg_id as string);
-          const p = prices.find((x) => x.printing?.toLowerCase() === String(card.printing).toLowerCase());
-          if (!p) continue;
-          rows.push({
-            sealed_product_id: null,
-            card_id: card.id,
-            source_id: sourceId("pokemontcg_io")!,
-            source_kind: "provider",
-            currency: p.currency,
-            market_price: p.market === null ? null : p.market.toFixed(2),
-            low_price: p.low === null ? null : p.low.toFixed(2),
-            mid_price: p.mid === null ? null : p.mid.toFixed(2),
-            high_price: p.high === null ? null : p.high.toFixed(2),
-            captured_at: startedAt.toISOString(),
-            provider_as_of: p.asOf?.toISOString() ?? null,
-            snapshot_date: startedAt.toISOString().slice(0, 10),
-          });
-        } catch (err) {
-          report.errors.push(`pokemontcg.io ${card.pokemontcg_id}: ${(err as Error).message}`);
-        }
-      }
-      report.snapshotsWritten += await writeSnapshots(db, rows);
-    }
+    report.requestsRemainingToday = provider.rateLimit?.daily_remaining ?? null;
 
     if (report.setsProcessed === 0 && report.errors.length > 0) report.status = "failed";
   } catch (err) {

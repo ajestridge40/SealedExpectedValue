@@ -4,7 +4,7 @@
 -- pull-rate models built from publicly reported COMMUNITY estimates with
 -- their sources. What is NOT here: prices, images, or card lists. Those come
 -- from the catalog import and price refresh (`npm run catalog:import`,
--- `npm run prices:refresh`), so nothing in this file can be mistaken for
+-- `npm run prices:refresh:force`), so nothing in this file can be mistaken for
 -- market data.
 --
 -- The Pokémon Company does not publish pull rates. The rates below come from
@@ -22,12 +22,9 @@ insert into public.games (slug, name, tcgplayer_category_id) values
 on conflict (slug) do update set name = excluded.name, tcgplayer_category_id = excluded.tcgplayer_category_id;
 
 insert into public.data_sources (slug, name, kind, website_url, attribution, notes) values
-  ('tcgcsv', 'TCGCSV (TCGplayer market prices)', 'pricing_provider', 'https://tcgcsv.com',
-   'Prices: TCGplayer market prices via TCGCSV (tcgcsv.com).',
-   'Free daily mirror of TCGplayer catalog and prices, updated ~20:00 UTC. No API key.'),
-  ('pokemontcg_io', 'Pokémon TCG API', 'metadata_provider', 'https://pokemontcg.io',
-   'Card data: Pokémon TCG API (pokemontcg.io).',
-   'Pokémon card metadata and images with TCGplayer-derived prices. Optional secondary source.'),
+  ('tcgapi', 'TCG API (TCGplayer market prices)', 'pricing_provider', 'https://tcgapi.dev',
+   'Prices: TCGplayer market prices via TCG API (tcgapi.dev).',
+   'Requires an API key. Plans are metered per day; prices refresh about daily for major games.'),
   ('csv_import', 'CSV import', 'import', null, null, 'Prices uploaded by an administrator.'),
   ('manual', 'Manual entry', 'manual', null, null, 'Prices typed in by an administrator.'),
   ('tcgplayer_pull_rates', 'TCGplayer pull-rate studies', 'pull_rate_source', 'https://www.tcgplayer.com/content',

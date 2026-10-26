@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -49,11 +49,11 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
     url.pathname = `/${DB_NAME}`;
     db = new Client({ connectionString: url.toString() });
     await db.connect();
-    for (const f of [
-      "tests/db/supabase-shim.sql",
-      "supabase/migrations/20261026000000_init.sql",
-      "supabase/seed.sql",
-    ]) {
+    const migrations = readdirSync(join(root, "supabase/migrations"))
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .map((f) => `supabase/migrations/${f}`);
+    for (const f of ["tests/db/supabase-shim.sql", ...migrations, "supabase/seed.sql"]) {
       await db.query(readFileSync(join(root, f), "utf8"));
     }
     await db.query(

@@ -4,9 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { runCatalogImport } from "@/lib/catalog/import";
-import { config } from "@/lib/env";
 import { parsePriceCsv } from "@/lib/pricing/csv-import";
-import { PokemonTcgProvider } from "@/lib/pricing/providers/pokemontcg";
 import { runPriceRefresh } from "@/lib/pricing/refresh";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -146,14 +144,13 @@ export async function importPriceCsv(_: CsvImportState, formData: FormData): Pro
 export async function refreshPricesNow(_: FormState): Promise<FormState> {
   await requireAdmin();
   try {
-    const report = await runPriceRefresh(createAdminClient(), {
-      force: true,
-      tcgcsv: config.enableTcgcsv() ? undefined : null,
-      pokemontcg: config.enablePokemonTcg() ? new PokemonTcgProvider() : null,
-    });
+    const report = await runPriceRefresh(createAdminClient(), { force: true });
     revalidatePath("/", "layout");
     if (report.status === "skipped") return { message: `Skipped: ${report.reason}` };
-    const summary = `${report.status}: ${report.snapshotsWritten} prices saved from ${report.setsProcessed} set(s).`;
+    const summary =
+      `${report.status}: ${report.snapshotsWritten} prices saved from ${report.setsProcessed} set(s).` +
+      (report.allPrintings === false ? " Your TCG API plan returns only each card's main printing." : "") +
+      (report.requestsRemainingToday != null ? ` TCG API requests left today: ${report.requestsRemainingToday}.` : "");
     return report.errors.length
       ? { error: `${summary} Errors: ${report.errors.slice(0, 5).join(" | ")}` }
       : { message: summary };

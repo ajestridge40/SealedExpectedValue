@@ -35,7 +35,7 @@ export default async function SettingsPage({
         <CardHeader>
           <CardTitle>Price refresh</CardTitle>
           <CardDescription>
-            Prices are refreshed for everyone once a day by a scheduled job (TCGCSV updates daily around 20:00 UTC).
+            Prices are refreshed for everyone once a day by a scheduled job (TCG API updates prices about once a day).
             Refreshing more often would not produce newer prices.
           </CardDescription>
         </CardHeader>
