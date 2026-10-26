@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Decimal } from "../money";
 import { calculateEv } from "./engine";
 import { breakEvenPrice, calculateReturns, compareScenarios } from "./returns";
-import type { CardRef, OutcomeInput, PullModelInput, SlotInput } from "./types";
+import type { CardRef, OutcomeInput, OutcomeSource, PullModelInput, SlotInput } from "./types";
 
 const NOW = new Date("2026-10-26T12:00:00Z");
 const FRESH = "2026-10-26T00:00:00Z";
@@ -12,8 +12,8 @@ function card(id: string, price: string | null, asOf: string | null = FRESH, cur
   return { id, name: `Card ${id}`, price: price === null ? null : { amount: price, currency, asOf } };
 }
 
-const community = { type: "community" as const, name: "Test sample", confidence: "medium" as const };
-const official = { type: "official" as const, name: "Publisher", url: "https://example.com", confidence: "high" as const };
+const community: OutcomeSource = { type: "community", name: "Test sample", confidence: "medium" };
+const official: OutcomeSource = { type: "official", name: "Publisher", url: "https://example.com", confidence: "high" };
 
 function cardOutcome(id: string, p: string | null, c: CardRef, source = community): OutcomeInput {
   return { id, label: id, kind: "card", probability: p, card: c, source };

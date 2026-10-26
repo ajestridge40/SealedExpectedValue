@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { cache } from "react";
 import { publicEnv } from "./env";
 import { createClient } from "./supabase/server";
@@ -20,6 +21,8 @@ export interface Profile {
 
 /** The signed-in user (JWT verified by Supabase), or null. Cached per request. */
 export const getUser = cache(async (): Promise<SessionUser | null> => {
+  // Session-dependent: never prerender at build time.
+  await connection();
   if (!publicEnv()) return null;
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
