@@ -4,11 +4,11 @@ import {
   type TcgGroup,
   type TcgPrice,
   type TcgProduct,
-} from "../pricing/providers/tcgcsv";
+} from "../pricing/providers/tcgtracking";
 import { safeImageUrl } from "../pricing/types";
 
 /*
- * Strict name matching between our catalog and TCGplayer (via TCGCSV).
+ * Strict name matching between our catalog and TCGplayer (via TCGTracking).
  * Only exact matches after normalization are accepted; anything ambiguous is
  * reported for a human to resolve by setting the id by hand.
  */

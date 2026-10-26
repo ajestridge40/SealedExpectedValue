@@ -148,7 +148,7 @@ export async function refreshPricesNow(_: FormState): Promise<FormState> {
   try {
     const report = await runPriceRefresh(createAdminClient(), {
       force: true,
-      tcgcsv: config.enableTcgcsv() ? undefined : null,
+      tcgtracking: config.enableTcgtracking() ? undefined : null,
       pokemontcg: config.enablePokemonTcg() ? new PokemonTcgProvider() : null,
     });
     revalidatePath("/", "layout");

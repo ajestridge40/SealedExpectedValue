@@ -1,5 +1,5 @@
 /**
- * Refresh prices from TCGCSV (and pokemontcg.io when ENABLE_POKEMONTCG=1).
+ * Refresh prices from TCGTracking (and pokemontcg.io when ENABLE_POKEMONTCG=1).
  *   npm run prices:refresh            # skips if refreshed in the last 12h
  *   npm run prices:refresh -- --force
  */
@@ -10,7 +10,7 @@ import { adminClient } from "./lib.mts";
 const report = await runPriceRefresh(adminClient(), {
   force: process.argv.includes("--force"),
   minIntervalHours: Number(process.env.PRICE_REFRESH_MIN_INTERVAL_HOURS ?? 12),
-  tcgcsv: process.env.ENABLE_TCGCSV === "0" ? null : undefined,
+  tcgtracking: process.env.ENABLE_TCGTRACKING === "0" ? null : undefined,
   pokemontcg: process.env.ENABLE_POKEMONTCG === "1" ? new PokemonTcgProvider() : null,
 });
 console.log(JSON.stringify(report, null, 2));

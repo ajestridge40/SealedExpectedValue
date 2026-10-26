@@ -15,7 +15,7 @@ export function JobButtons() {
       <div className="flex flex-wrap gap-2">
         <form action={importAction}>
           <Button type="submit" disabled={importing}>
-            {importing ? "Importing…" : "1. Import / link catalog from TCGCSV"}
+            {importing ? "Importing…" : "1. Import / link catalog from TCGTracking"}
           </Button>
         </form>
         <form action={refreshAction}>

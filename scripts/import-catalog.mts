@@ -1,5 +1,5 @@
 /**
- * Link sets/products to TCGplayer ids and import all cards from TCGCSV.
+ * Link sets/products to TCGplayer ids and import all cards from TCGTracking (free, no key).
  *   npm run catalog:import
  */
 import { runCatalogImport } from "../src/lib/catalog/import.ts";

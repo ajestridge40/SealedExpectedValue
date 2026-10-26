@@ -3,7 +3,7 @@
  * supplied by a user), per-host pacing, timeouts and one retry on 429/5xx.
  */
 
-const ALLOWED_HOSTS = new Set(["tcgcsv.com", "api.pokemontcg.io"]);
+const ALLOWED_HOSTS = new Set(["openapi.tcgtracking.com", "tcgtracking.com", "api.pokemontcg.io"]);
 
 export class ProviderError extends Error {
   constructor(

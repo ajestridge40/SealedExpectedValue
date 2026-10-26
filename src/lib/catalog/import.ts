@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { TcgcsvProvider } from "../pricing/providers/tcgcsv";
+import { TcgTrackingProvider } from "../pricing/providers/tcgtracking";
 import { safeImageUrl } from "../pricing/types";
 import { cardRowsFromGroup, matchGroup, matchSealedProduct } from "./match";
 
 /*
- * Catalog import from TCGCSV: link our sets and sealed products to TCGplayer
+ * Catalog import from TCGTracking: link our sets and sealed products to TCGplayer
  * ids by strict name matching, copy product images, and upsert every single
  * card (one row per printing) in linked sets. Ambiguous matches are reported,
  * never guessed. Takes a service-role client.
@@ -20,9 +20,9 @@ export interface ImportReport {
 
 export async function runCatalogImport(
   db: SupabaseClient,
-  opts: { provider?: TcgcsvProvider; setIds?: string[] } = {},
+  opts: { provider?: TcgTrackingProvider; setIds?: string[] } = {},
 ): Promise<ImportReport> {
-  const provider = opts.provider ?? new TcgcsvProvider();
+  const provider = opts.provider ?? new TcgTrackingProvider();
   const report: ImportReport = { setsLinked: [], productsLinked: [], cardsUpserted: 0, needsAttention: [], errors: [] };
 
   let q = db.from("sets").select("id, name, game_id, tcgplayer_group_id, games!inner(tcgplayer_category_id)");

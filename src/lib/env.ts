@@ -46,7 +46,7 @@ export function serverEnv() {
 
 export const config = {
   cronSecret: () => process.env.CRON_SECRET || null,
-  enableTcgcsv: () => process.env.ENABLE_TCGCSV !== "0",
+  enableTcgtracking: () => process.env.ENABLE_TCGTRACKING !== "0",
   enablePokemonTcg: () => process.env.ENABLE_POKEMONTCG === "1",
   /** Skip a scheduled refresh if the last successful one is newer than this. */
   refreshMinIntervalHours: () => Number(process.env.PRICE_REFRESH_MIN_INTERVAL_HOURS ?? 12),

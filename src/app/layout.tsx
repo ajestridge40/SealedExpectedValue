@@ -38,8 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <p>{DISCLAIMER}</p>
             <p>
               Prices: TCGplayer market prices via{" "}
-              <a className="hover:text-muted underline" href="https://tcgcsv.com" rel="noreferrer">
-                TCGCSV
+              <a className="hover:text-muted underline" href="https://tcgtracking.com/tcgapi/" rel="noreferrer">
+                TCGTracking
               </a>{" "}
               unless marked as imported or manual. Pull rates are community estimates unless labelled official. Not
               affiliated with TCGplayer, The Pokémon Company, Wizards of the Coast or Konami.{" "}

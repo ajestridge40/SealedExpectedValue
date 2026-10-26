@@ -4,7 +4,7 @@
  *
  * 1. Asks for your Supabase keys and writes .env.local (skipped if it exists).
  * 2. Creates the database schema and seed data (or re-runs the idempotent seed).
- * 3. Imports the catalog and the first prices from TCGCSV.
+ * 3. Imports the catalog and the first prices from TCGTracking.
  */
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -14,7 +14,7 @@ import { createInterface } from "node:readline";
 import { createClient } from "@supabase/supabase-js";
 import { runCatalogImport } from "../src/lib/catalog/import.ts";
 import { runPriceRefresh } from "../src/lib/pricing/refresh.ts";
-import { TcgcsvProvider } from "../src/lib/pricing/providers/tcgcsv.ts";
+import { TcgTrackingProvider } from "../src/lib/pricing/providers/tcgtracking.ts";
 import { SEED_FILE, applyFiles, connect, migrate } from "./db.mts";
 
 const ENV_FILE = join(import.meta.dirname, "..", ".env.local");
@@ -130,18 +130,18 @@ console.log("✓ Database ready\n");
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-console.log("Importing catalog from TCGCSV (sets, products, cards, images)…");
+console.log("Importing catalog from TCGTracking (sets, products, cards, images)…");
 // One provider instance for both steps: responses are cached, so the refresh
 // reuses what the import downloaded.
-const tcgcsv = new TcgcsvProvider();
-const imp = await runCatalogImport(admin, { provider: tcgcsv });
+const tcgtracking = new TcgTrackingProvider();
+const imp = await runCatalogImport(admin, { provider: tcgtracking });
 console.log(
   `  ${imp.setsLinked.length} set(s) linked, ${imp.productsLinked.length} product(s) linked, ${imp.cardsUpserted} card printings`,
 );
 for (const n of [...imp.needsAttention, ...imp.errors]) console.log(`  ! ${n}`);
 
 console.log("Refreshing prices…");
-const ref = await runPriceRefresh(admin, { force: true, tcgcsv });
+const ref = await runPriceRefresh(admin, { force: true, tcgtracking });
 console.log(`  ${ref.status}: ${ref.snapshotsWritten} prices from ${ref.setsProcessed} set(s)`);
 for (const e of ref.errors) console.log(`  ! ${e}`);
 

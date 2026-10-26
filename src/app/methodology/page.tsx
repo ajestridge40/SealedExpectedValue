@@ -98,13 +98,14 @@ EV / price  = EV ÷ purchase price`}</pre>
       <Section title="Prices">
         <p>
           Market prices are TCGplayer market prices (USD) from{" "}
-          <a className="text-accent hover:underline" href="https://tcgcsv.com" rel="noreferrer">
-            TCGCSV
+          <a className="text-accent hover:underline" href="https://tcgtracking.com/tcgapi/" rel="noreferrer">
+            TCGTracking
           </a>
-          , a free community mirror updated once a day. A scheduled job stores one snapshot per item per day; pages read
-          those stored prices and never call a provider while rendering. Prices imported from CSV or entered manually
-          are labelled as such. A price older than your staleness setting (default 3 days) is marked stale; if a
-          provider is unavailable, the last known price stays in place with its original timestamp.
+          , a free open API (no key, CDN-cached) whose prices change about once a day. A scheduled job stores one
+          snapshot per item per day; pages read those stored prices and never call a provider while rendering. Prices
+          imported from CSV or entered manually are labelled as such. A price older than your staleness setting (default
+          3 days) is marked stale; if a provider is unavailable, the last known price stays in place with its original
+          timestamp.
         </p>
         <p>
           Card prices are for ungraded, near-mint copies. There is no currency conversion: values in different

@@ -2,16 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAll } from "../data/fetch-all";
 import { planSnapshots, type SnapshotRow, type TrackedCard, type TrackedProduct } from "./plan";
 import { PokemonTcgProvider } from "./providers/pokemontcg";
-import { TcgcsvProvider } from "./providers/tcgcsv";
+import { TcgTrackingProvider } from "./providers/tcgtracking";
 
 /*
  * Scheduled price refresh. Takes a service-role client (no "server-only"
  * import, so the CLI script can use it too).
  *
  * - Holds a job lock (job_runs) so overlapping cron/manual runs do not race.
- * - Skips if a successful run finished recently, unless forced: TCGCSV only
- *   updates once a day, so calling it more often wastes its bandwidth.
- * - One request per set to TCGCSV. Provider failures are recorded and the
+ * - Skips if a successful run finished recently, unless forced: prices change
+ *   about daily, so refreshing more often only adds load on the free API.
+ * - Two requests per set to TCGTracking (products + pricing). Provider failures are recorded and the
  *   last known prices are left untouched.
  */
 
@@ -34,7 +34,7 @@ export async function runPriceRefresh(
   opts: {
     force?: boolean;
     minIntervalHours?: number;
-    tcgcsv?: TcgcsvProvider | null;
+    tcgtracking?: TcgTrackingProvider | null;
     pokemontcg?: PokemonTcgProvider | null;
     now?: () => Date;
   } = {},
@@ -76,8 +76,11 @@ export async function runPriceRefresh(
     if (error) throw new Error(error.message);
     const sourceId = (slug: string) => sources?.find((s) => s.slug === slug)?.id as string | undefined;
 
-    const tcgcsv = opts.tcgcsv === undefined ? new TcgcsvProvider() : opts.tcgcsv;
-    if (tcgcsv && sourceId("tcgcsv")) {
+    const tcgtracking = opts.tcgtracking === undefined ? new TcgTrackingProvider() : opts.tcgtracking;
+    if (tcgtracking && !sourceId("tcgtracking")) {
+      report.errors.push("The 'tcgtracking' data source is missing. Run `npm run db:setup`.");
+    }
+    if (tcgtracking && sourceId("tcgtracking")) {
       const { data: sets, error: setErr } = await db
         .from("sets")
         .select("id, name, tcgplayer_group_id, games!inner(tcgplayer_category_id)")
@@ -88,7 +91,7 @@ export async function runPriceRefresh(
         const game = set.games as unknown as { tcgplayer_category_id: number | null };
         if (!game?.tcgplayer_category_id) continue;
         try {
-          const prices = await tcgcsv.setPrices(game.tcgplayer_category_id, set.tcgplayer_group_id as number);
+          const prices = await tcgtracking.setPrices(game.tcgplayer_category_id, set.tcgplayer_group_id as number);
           const products = await fetchAll<TrackedProduct>((f, t) =>
             db
               .from("sealed_products")
@@ -106,7 +109,13 @@ export async function runPriceRefresh(
               .order("id")
               .range(f, t),
           );
-          const plan = planSnapshots({ products, cards, prices, sourceId: sourceId("tcgcsv")!, capturedAt: startedAt });
+          const plan = planSnapshots({
+            products,
+            cards,
+            prices,
+            sourceId: sourceId("tcgtracking")!,
+            capturedAt: startedAt,
+          });
           report.snapshotsWritten += await writeSnapshots(db, plan.rows);
           report.unpricedProducts += plan.unpricedProducts.length;
           report.unpricedCards += plan.unpricedCards.length;

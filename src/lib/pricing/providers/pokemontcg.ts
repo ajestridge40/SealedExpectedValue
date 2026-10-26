@@ -7,7 +7,7 @@ import type { PricingProvider, ProviderCard, ProviderPrice, SearchQuery } from "
  * plus a copy of TCGplayer prices per printing with an "updatedAt" date. No
  * sealed products. Works without a key at low rate limits; set
  * POKEMONTCG_API_KEY for higher limits. Used as a secondary source for cards
- * that have a pokemontcg_id but no TCGCSV link.
+ * that have a pokemontcg_id but no TCGTracking link.
  */
 
 const BASE = "https://api.pokemontcg.io/v2";

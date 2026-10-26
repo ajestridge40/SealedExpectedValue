@@ -18,13 +18,17 @@
 insert into public.games (slug, name, tcgplayer_category_id) values
   ('pokemon', 'Pokémon TCG', 3),
   ('mtg', 'Magic: The Gathering', 1),
-  ('yugioh', 'Yu-Gi-Oh!', 2)
+  ('yugioh', 'Yu-Gi-Oh!', 2),
+  ('one-piece', 'One Piece Card Game', 68),
+  ('lorcana', 'Disney Lorcana', 71),
+  ('star-wars-unlimited', 'Star Wars: Unlimited', 79),
+  ('riftbound', 'Riftbound', 89)
 on conflict (slug) do update set name = excluded.name, tcgplayer_category_id = excluded.tcgplayer_category_id;
 
 insert into public.data_sources (slug, name, kind, website_url, attribution, notes) values
-  ('tcgcsv', 'TCGCSV (TCGplayer market prices)', 'pricing_provider', 'https://tcgcsv.com',
-   'Prices: TCGplayer market prices via TCGCSV (tcgcsv.com).',
-   'Free daily mirror of TCGplayer catalog and prices, updated ~20:00 UTC. No API key.'),
+  ('tcgtracking', 'TCGTracking (TCGplayer market prices)', 'pricing_provider', 'https://tcgtracking.com/tcgapi/',
+   'Prices: TCGplayer market prices via the TCGTracking Open API.',
+   'Free open API, no key, CDN-cached. Sealed products and every card printing, with images.'),
   ('pokemontcg_io', 'Pokémon TCG API', 'metadata_provider', 'https://pokemontcg.io',
    'Card data: Pokémon TCG API (pokemontcg.io).',
    'Pokémon card metadata and images with TCGplayer-derived prices. Optional secondary source.'),
