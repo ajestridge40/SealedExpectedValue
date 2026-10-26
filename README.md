@@ -11,7 +11,7 @@ SealedEV helps you research sealed trading card products and track a collection:
   market value, unrealized gain/loss, CSV export.
 - **Watchlist, settings, data export and account deletion.**
 
-Pokémon is the first supported game. Magic: The Gathering and Yu-Gi-Oh! are in the data model (and in TCG API's
+Pokémon is the first supported game. Magic: The Gathering and Yu-Gi-Oh! are in the data model (and in TCGCSV's
 catalog); adding a set and a pull model is data entry, not code.
 
 > **Honesty rules.** No price, image or pull rate in this repository is invented. The seed contains real products and
@@ -28,8 +28,8 @@ or Docker required.
 ```
 src/lib/ev/          EV engine (pure, tested): engine, confidence, returns, DB→model mapping
 src/lib/portfolio/   lot valuation, positions, portfolio totals (pure, tested)
-src/lib/pricing/     provider interface, TCG API provider, refresh job, CSV import
-src/lib/catalog/     TCG API catalog import and strict name matching
+src/lib/pricing/     provider interface, TCGCSV + pokemontcg.io providers, refresh job, CSV import
+src/lib/catalog/     TCGCSV catalog import and strict name matching
 src/lib/data/        server-side queries (Supabase, RLS applies)
 src/app/             pages, server actions (app/actions), API routes (cron, exports)
 supabase/            migrations (schema, RLS), seed.sql, CLI config
@@ -37,29 +37,25 @@ scripts/             catalog import, price refresh, make-admin CLIs
 tests/db/            migration + RLS integration tests against PostgreSQL
 ```
 
-## Pricing data: TCG API
+## Pricing data: what is integrated and why
 
-Prices, the catalog (sets, sealed products, cards with numbers and rarities) and images come from
-**[TCG API](https://tcgapi.dev)**, which serves TCGplayer market prices for 89+ games, including sealed products.
-It needs an API key (`TCGAPI_KEY`, server-only, sent as `X-API-Key`). CSV import and manual entry remain available
-to admins and are always labelled “CSV import” / “Manual”, never as provider data.
+| Source                                              | Used for                                                     | Key                             | Notes                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[TCGCSV](https://tcgcsv.com)** (primary)          | Sealed **and** single-card prices, catalog, product images   | None                            | Free community mirror of TCGplayer's catalog and market prices for every TCGplayer category. Updated once daily around 20:00 UTC. USD only. Market price only (plus low/mid/high), no sales volume. No published SLA or quota; be polite: SealedEV makes one request per set per refresh. Attribute TCGplayer/TCGCSV. |
+| [Pokémon TCG API](https://pokemontcg.io) (optional) | Pokémon card prices for cards linked by `pokemontcg_id` only | Optional (`POKEMONTCG_API_KEY`) | Card metadata/images with TCGplayer-derived prices and an update date. No sealed products. Rate limits without a key are low (reported around 1,000 requests/day); a free key raises them. Disabled by default (`ENABLE_POKEMONTCG=1`).                                                                               |
+| CSV import / manual entry                           | Anything else                                                | —                               | Admin-only. Stored and displayed as “CSV import” / “Manual”, never as live data.                                                                                                                                                                                                                                      |
 
-| Plan (per tcgapi.dev) | Requests/day | What SealedEV gets                                                                                                                                                                                                  |
-| --------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free                  | 100          | Current price of each card's **main printing** and of sealed products. Other printings (e.g. reverse holos) stay unpriced, so EVs that depend on them are shown as partial estimates. Personal, non-commercial use. |
-| Starter and up        | 2,500+       | **Every printing** of every product in a set from one request (`/sets/{id}/prices`), so reverse-holo slots are priced too.                                                                                          |
+This is the same provider setup as the SealedEV project (TCGCSV for everything, with optional fallbacks).
 
-The app detects the plan automatically: it tries the all-printings endpoint once and falls back if the API answers 403. Request cost is small: the catalog import uses roughly 2 requests per game plus 2–3 per set, and each daily
-refresh uses 1 request per set (2–3 on the free plan). The two Pokémon sets in the seed need about 10 requests for setup
-and about 6 per day. Each run reports how many requests are left today, and a 429 (daily limit) stops the run early
-without touching stored prices. Plans reset at UTC midnight; prices on TCG API refresh about daily for major games.
+Why not others: **TCGplayer's official API is closed to new developers** (its docs state no new API access is being
+granted). eBay sold-listing data needs restricted API access; Cardmarket's API requires approval. Scraping is not used.
+Provider responses are validated with Zod, normalized into internal types (`src/lib/pricing/types.ts`), and stored as
+`price_snapshots`; pages never call a provider while rendering. A new provider implements `PricingProvider`
+(`searchProducts`, `getProductDetails`, `getCurrentProductPrice`, `searchCards`, `getCardDetails`,
+`getCurrentCardPrice`, optional `getPriceHistory`). Neither integrated provider offers price history, so history is
+built from SealedEV's own daily snapshots.
 
-Responses are validated with Zod, normalized into internal types (`src/lib/pricing/types.ts`), and stored as
-`price_snapshots`; pages never call the API while rendering. History charts are built from SealedEV's own daily
-snapshots. Another provider can be added by implementing `PricingProvider` (`searchProducts`, `getProductDetails`,
-`getCurrentProductPrice`, `searchCards`, `getCardDetails`, `getCurrentCardPrice`, optional `getPriceHistory`).
-
-**Card images** are hot-linked from `tcgplayer-cdn.tcgplayer.com` (allow-listed in
+**Card images** are hot-linked from `tcgplayer-cdn.tcgplayer.com` / `images.pokemontcg.io` (allow-listed in
 `src/lib/pricing/types.ts`), not downloaded or re-hosted. Missing images show a placeholder.
 
 ## Prerequisites
@@ -95,17 +91,14 @@ password and keep it). When it has finished provisioning, gather four values:
 
 Use the **Session pooler** string: the “Direct connection” host is IPv6-only and fails on many home networks.
 
-Also create a **TCG API key** at [tcgapi.dev/dashboard](https://tcgapi.dev/dashboard) (free plan: 100 requests/day,
-no credit card). It looks like `tcg_live_…`.
-
 **3. Run the setup wizard**
 
 ```powershell
 npm run setup
 ```
 
-It asks for the four Supabase values and your TCG API key, writes `.env.local` (git-ignored), creates the tables, Row Level Security policies and
-seed data, then imports the catalog (sets, sealed products, every card, images) and today's prices from TCG API. Re-running
+It asks for the four values, writes `.env.local` (git-ignored), creates the tables, Row Level Security policies and
+seed data, then imports the catalog (sets, sealed products, every card, images) and today's prices from TCGCSV. Re-running
 it is safe; delete `.env.local` first if you want to re-enter keys.
 
 **4. Allow local sign-in links.** In Supabase → **Authentication → URL Configuration**, set **Site URL** to
@@ -125,8 +118,8 @@ manual prices):
 npm run user:make-admin you@example.com
 ```
 
-Day to day: `npm run dev` to run the app, `npm run prices:refresh:force` to pull the latest prices (TCG API updates
-prices about once a day), `npm run catalog:import` after adding sets or products.
+Day to day: `npm run dev` to run the app, `npm run prices:refresh:force` to pull the latest prices (TCGCSV updates once a
+day around 20:00 UTC), `npm run catalog:import` after adding sets or products.
 
 If the import lists items under “needs attention” (no exact TCGplayer name match), set `sets.tcgplayer_group_id` or
 `sealed_products.tcgplayer_product_id` in the Supabase **Table Editor** (the id is the number in
@@ -134,7 +127,7 @@ If the import lists items under “needs attention” (no exact TCGplayer name m
 
 ### Other ways to set up the database
 
-- `npm run db:setup` — schema + seed on an empty database, using `DATABASE_URL` from `.env.local`.
+- `npm run db:setup` — apply any pending migrations, then the seed (safe to repeat), using `DATABASE_URL` from `.env.local`. Applied migrations are recorded in the same table the Supabase CLI uses.
 - `npm run db:seed` — re-run only the (idempotent) seed.
 - Supabase CLI: `npx supabase link --project-ref <ref>` then `npx supabase db push --include-seed`.
 - By hand: paste `supabase/migrations/20261026000000_init.sql`, then `supabase/seed.sql`, into the Supabase SQL editor.
@@ -161,7 +154,7 @@ npm run user:make-admin you@example.com
 | `NEXT_PUBLIC_ENABLE_GOOGLE_AUTH`                                            | public          | `1` to show “Continue with Google”                               |
 | `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`)                      | **server only** | Scheduled refresh, catalog import, CLI scripts, account deletion |
 | `CRON_SECRET`                                                               | **server only** | Bearer token required by `/api/cron/refresh-prices`              |
-| `TCGAPI_KEY`                                                                | **server only** | TCG API key for prices and catalog (required for live prices)    |
+| `ENABLE_TCGCSV`, `ENABLE_POKEMONTCG`, `POKEMONTCG_API_KEY`                  | server only     | Provider switches / key                                          |
 | `PRICE_REFRESH_MIN_INTERVAL_HOURS`                                          | server only     | Minimum gap between scheduled refreshes (default 12)             |
 | `DATABASE_URL`                                                              | CLI only        | `npm run setup`, `db:setup`, `db:seed` (Session pooler string)   |
 
@@ -237,7 +230,7 @@ npm start
 4. Deploy. Then run `npm run catalog:import` and `npm run prices:refresh:force` once from your machine with the
    production env vars (or sign in as an admin and use `/admin`).
 
-**Scheduled refresh.** `vercel.json` defines a daily cron at 21:15 UTC (after the provider's daily update) that calls
+**Scheduled refresh.** `vercel.json` defines a daily cron at 21:15 UTC (after TCGCSV's ~20:00 UTC update) that calls
 `/api/cron/refresh-prices`; Vercel sends `Authorization: Bearer $CRON_SECRET` automatically. On the Hobby plan cron jobs
 run at most once a day and may fire any time within the scheduled hour, which is all this app needs. The route allows up
 to 300 s; a refresh of a few sets takes seconds, but check your plan's function duration limit if you track many sets.
@@ -271,7 +264,7 @@ The app is a standard Next.js server app; the database stays on Supabase.
   # or: pg_dump "$DATABASE_URL" -Fc -f sealedev.dump
   ```
   Restore with `psql`/`pg_restore` into a fresh project after applying the migrations.
-- The catalog and prices can always be rebuilt from TCG API (`catalog:import` + `prices:refresh`), but **price history
+- The catalog and prices can always be rebuilt from TCGCSV (`catalog:import` + `prices:refresh`), but **price history
   before the restore point and user collections cannot**, so back up the database itself.
 - Users can download their own data from Settings (collection CSV and full JSON export).
 
@@ -281,10 +274,8 @@ The app is a standard Next.js server app; the database stays on Supabase.
   cards on one marketplace, not what you will net after fees and shipping. Graded cards are valued at the ungraded
   price unless you enter your own valuation.
 - No currency conversion. Lots and prices in other currencies are kept separate and flagged, never converted.
-- TCG API is a third-party service metered per day. If it is down, the key is invalid, or the daily limit is reached,
-  the refresh fails with a clear error and the last known prices stay in place with their original timestamps (shown
-  as stale once old). On the free plan only each card's main printing is priced, and the free plan is for personal,
-  non-commercial use; check tcgapi.dev's current terms before deploying publicly.
+- TCGCSV is a free community service with no SLA. If it is down, the refresh fails, the error is recorded, and the last
+  known prices stay in place with their original timestamps (shown as stale once old).
 - Price history starts from your first refresh; earlier history is not back-filled.
 - **Pull rates**: The Pokémon Company publishes no odds. Seeded rates are community estimates with sample sizes and
   links; small samples (e.g. Prismatic Evolutions, ~1,200 packs) carry wide uncertainty. Confidence labels are

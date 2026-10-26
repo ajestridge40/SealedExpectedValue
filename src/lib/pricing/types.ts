@@ -70,7 +70,11 @@ export interface PricingProvider {
 }
 
 /** Image hosts we will display. Anything else falls back to a placeholder. */
-export const ALLOWED_IMAGE_HOSTS = ["tcgplayer-cdn.tcgplayer.com", "product-images.tcgplayer.com"];
+export const ALLOWED_IMAGE_HOSTS = [
+  "tcgplayer-cdn.tcgplayer.com",
+  "product-images.tcgplayer.com",
+  "images.pokemontcg.io",
+];
 
 export function safeImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;

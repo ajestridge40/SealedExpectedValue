@@ -4,17 +4,17 @@
  *
  * 1. Asks for your Supabase keys and writes .env.local (skipped if it exists).
  * 2. Creates the database schema and seed data (or re-runs the idempotent seed).
- * 3. Imports the catalog and the first prices from TCG API (tcgapi.dev).
+ * 3. Imports the catalog and the first prices from TCGCSV.
  */
 import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline";
 import { createClient } from "@supabase/supabase-js";
 import { runCatalogImport } from "../src/lib/catalog/import.ts";
-import { TcgApiProvider } from "../src/lib/pricing/providers/tcgapi.ts";
 import { runPriceRefresh } from "../src/lib/pricing/refresh.ts";
+import { TcgcsvProvider } from "../src/lib/pricing/providers/tcgcsv.ts";
 import { SEED_FILE, applyFiles, connect, migrate } from "./db.mts";
 
 const ENV_FILE = join(import.meta.dirname, "..", ".env.local");
@@ -47,9 +47,6 @@ async function ask(lines: Lines, question: string, check: (v: string) => string 
 
 console.log("\nSealedEV setup\n==============\n");
 
-let lineReader: Lines | null = null;
-const lines = (): Lines => (lineReader ??= createInterface({ input, terminal: false })[Symbol.asyncIterator]());
-
 let env: Record<string, string>;
 if (existsSync(ENV_FILE)) {
   console.log("Using existing .env.local (delete it to re-enter your keys).\n");
@@ -59,19 +56,21 @@ if (existsSync(ENV_FILE)) {
     "You need a Supabase project (free): https://supabase.com/dashboard → New project.\n" +
       "Then open your project and click “Connect” (top bar) and Project Settings → API Keys.\n",
   );
-  const url = await ask(lines(), "Project URL (https://<ref>.supabase.co): ", (v) =>
+  const rl = createInterface({ input, terminal: false });
+  const lines: Lines = rl[Symbol.asyncIterator]();
+  const url = await ask(lines, "Project URL (https://<ref>.supabase.co): ", (v) =>
     /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(v) || /^http:\/\/(localhost|127\.0\.0\.1):\d+\/?$/.test(v)
       ? null
       : "Expected something like https://abcdefgh.supabase.co",
   );
-  const anon = await ask(lines(), "Publishable key (sb_publishable_…) or legacy anon key: ", (v) =>
+  const anon = await ask(lines, "Publishable key (sb_publishable_…) or legacy anon key: ", (v) =>
     v.length >= 20 ? null : "That looks too short.",
   );
-  const secret = await ask(lines(), "Secret key (sb_secret_…) or legacy service_role key: ", (v) =>
+  const secret = await ask(lines, "Secret key (sb_secret_…) or legacy service_role key: ", (v) =>
     v.length >= 20 ? null : "That looks too short.",
   );
   const db = await ask(
-    lines(),
+    lines,
     "Database connection string — use “Session pooler” (postgresql://postgres.<ref>:<password>@…pooler.supabase.com:5432/postgres)\n" +
       "  (replace [YOUR-PASSWORD] with your database password): ",
     (v) =>
@@ -81,6 +80,7 @@ if (existsSync(ENV_FILE)) {
           ? "Replace [YOUR-PASSWORD] with your database password."
           : null,
   );
+  rl.close();
   env = {
     NEXT_PUBLIC_SUPABASE_URL: url.replace(/\/$/, ""),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
@@ -99,23 +99,6 @@ if (existsSync(ENV_FILE)) {
       "\n",
   );
   console.log("\n✓ Wrote .env.local\n");
-}
-
-// --- TCG API key -------------------------------------------------------------
-if (!env.TCGAPI_KEY) {
-  console.log(
-    "Prices come from TCG API. Create a free key at https://tcgapi.dev/dashboard (100 requests/day, no card).",
-  );
-  const key = await ask(lines(), "TCG API key (tcg_live_…), or press Enter to skip for now: ", (v) =>
-    v === "" || /^[A-Za-z0-9_-]{16,}$/.test(v) ? null : "That does not look like an API key.",
-  );
-  if (key) {
-    appendFileSync(ENV_FILE, `TCGAPI_KEY=${key}\n`);
-    env.TCGAPI_KEY = key;
-    console.log("✓ Saved TCGAPI_KEY to .env.local\n");
-  } else {
-    console.log("  Skipped. Add TCGAPI_KEY=… to .env.local later and run `npm run setup` again.\n");
-  }
 }
 
 // --- Database --------------------------------------------------------------
@@ -147,29 +130,19 @@ console.log("✓ Database ready\n");
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-if (!env.TCGAPI_KEY) {
-  console.log("Skipping catalog import and prices (no TCGAPI_KEY).");
-  process.exit(0);
-}
+console.log("Importing catalog from TCGCSV (sets, products, cards, images)…");
 // One provider instance for both steps: responses are cached, so the refresh
-// reuses what the import fetched and costs no extra API requests.
-const provider = new TcgApiProvider(env.TCGAPI_KEY);
-console.log("Importing catalog from TCG API (sets, products, cards, images)…");
-const imp = await runCatalogImport(admin, { provider });
+// reuses what the import downloaded.
+const tcgcsv = new TcgcsvProvider();
+const imp = await runCatalogImport(admin, { provider: tcgcsv });
 console.log(
   `  ${imp.setsLinked.length} set(s) linked, ${imp.productsLinked.length} product(s) linked, ${imp.cardsUpserted} card printings`,
 );
 for (const n of [...imp.needsAttention, ...imp.errors]) console.log(`  ! ${n}`);
 
 console.log("Refreshing prices…");
-const ref = await runPriceRefresh(admin, { force: true, provider });
+const ref = await runPriceRefresh(admin, { force: true, tcgcsv });
 console.log(`  ${ref.status}: ${ref.snapshotsWritten} prices from ${ref.setsProcessed} set(s)`);
-if (ref.allPrintings === false)
-  console.log(
-    "  Note: your TCG API plan returns only each card's main printing; other printings (e.g. reverse holos)\n" +
-      "  stay unpriced and EVs that need them are shown as partial estimates. The Starter plan includes all printings.",
-  );
-if (provider.rateLimit) console.log(`  TCG API requests left today: ${provider.rateLimit.daily_remaining}`);
 for (const e of ref.errors) console.log(`  ! ${e}`);
 
 console.log(`

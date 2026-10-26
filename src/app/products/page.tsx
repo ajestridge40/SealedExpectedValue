@@ -40,7 +40,7 @@ export default async function ProductsPage({
 
       {all.length === 0 ? (
         <EmptyState icon={PackageSearch} title="The catalog is empty" className="mt-6">
-          Run <code>npm run db:seed</code> and <code>npm run catalog:import</code> (see README) to load products.
+          Run <code>npm run setup</code> (see README) to create the catalog and load prices.
         </EmptyState>
       ) : items.length === 0 ? (
         <EmptyState icon={PackageSearch} title="No products match these filters" className="mt-6">

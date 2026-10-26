@@ -1,5 +1,5 @@
 /**
- * Link sets/products to TCG API / TCGplayer ids and import all cards (needs TCGAPI_KEY).
+ * Link sets/products to TCGplayer ids and import all cards from TCGCSV.
  *   npm run catalog:import
  */
 import { runCatalogImport } from "../src/lib/catalog/import.ts";

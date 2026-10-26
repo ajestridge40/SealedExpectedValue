@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { config } from "@/lib/env";
+import { PokemonTcgProvider } from "@/lib/pricing/providers/pokemontcg";
 import { runPriceRefresh } from "@/lib/pricing/refresh";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
     const report = await runPriceRefresh(createAdminClient(), {
       force: request.nextUrl.searchParams.get("force") === "1",
       minIntervalHours: config.refreshMinIntervalHours(),
+      tcgcsv: config.enableTcgcsv() ? undefined : null,
+      pokemontcg: config.enablePokemonTcg() ? new PokemonTcgProvider() : null,
     });
     return NextResponse.json(report, { status: report.status === "failed" ? 502 : 200 });
   } catch (err) {

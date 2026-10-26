@@ -3,7 +3,7 @@
  * supplied by a user), per-host pacing, timeouts and one retry on 429/5xx.
  */
 
-const ALLOWED_HOSTS = new Set(["api.tcgapi.dev"]);
+const ALLOWED_HOSTS = new Set(["tcgcsv.com", "api.pokemontcg.io"]);
 
 export class ProviderError extends Error {
   constructor(
@@ -69,4 +69,17 @@ export async function fetchJson<T>(url: string, opts: FetchJsonOptions = {}): Pr
       throw new ProviderError(`${parsed.hostname}${parsed.pathname}: invalid JSON`);
     }
   }
+}
+
+export async function fetchText(url: string, opts: FetchJsonOptions = {}): Promise<string> {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:" || !ALLOWED_HOSTS.has(parsed.hostname)) {
+    throw new ProviderError(`Refusing to fetch non-allowlisted URL host: ${parsed.hostname}`);
+  }
+  const res = await (opts.fetchImpl ?? fetch)(url, {
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new ProviderError(`${parsed.hostname}${parsed.pathname}: HTTP ${res.status}`, res.status);
+  return res.text();
 }
