@@ -1,7 +1,13 @@
 "use client";
 
 import { useActionState } from "react";
-import { importCatalogNow, importPriceCsv, refreshPricesNow, type CsvImportState } from "@/app/actions/admin";
+import {
+  importCatalogNow,
+  importPriceCsv,
+  refreshPricesNow,
+  syncLatestSets,
+  type CsvImportState,
+} from "@/app/actions/admin";
 import type { FormState } from "@/app/actions/auth";
 import { Notice } from "./page";
 import { Button } from "./ui/button";
@@ -61,6 +67,47 @@ export function CsvImportForm() {
           </ul>
         </details>
       ) : null}
+    </form>
+  );
+}
+
+export function SyncSetsForm({ games }: { games: { slug: string; name: string }[] }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(syncLatestSets, {});
+  return (
+    <form action={action} className="flex flex-col gap-3">
+      <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
+        <legend className="text-muted mb-2 text-xs font-medium">Games</legend>
+        {games.map((g) => (
+          <label key={g.slug} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="games"
+              value={g.slug}
+              defaultChecked={g.slug === "pokemon"}
+              className="accent-[var(--color-accent)]"
+            />
+            {g.name}
+          </label>
+        ))}
+      </fieldset>
+      <label className="flex items-center gap-2 text-sm">
+        Latest
+        <Input
+          name="maxSets"
+          type="number"
+          min={1}
+          max={100}
+          defaultValue={10}
+          className="w-20"
+          aria-label="Sets per game"
+        />
+        sets per game
+      </label>
+      <Button type="submit" className="self-start" disabled={pending}>
+        {pending ? "Syncing… (can take a minute)" : "Sync latest sets"}
+      </Button>
+      {state.message ? <Notice tone="success">{state.message}</Notice> : null}
+      {state.error ? <Notice tone="warn">{state.error}</Notice> : null}
     </form>
   );
 }

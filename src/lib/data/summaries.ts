@@ -1,3 +1,4 @@
+import { topValueRatio } from "../analytics/market";
 import type { ConfidenceLevel } from "../ev";
 import type { ProductEv } from "./ev";
 import type { DataSource, Game, PriceKind, ProductType, SetRow } from "./types";
@@ -31,14 +32,30 @@ export interface ProductSummary {
   net: string | null;
   netPct: string | null;
   isSample: boolean;
+  /** Sum of the set's five most valuable cards (market prices). */
+  top5Value: number | null;
+  /** top5Value ÷ market price: a quick set-strength indicator, not an EV. */
+  top5Ratio: number | null;
+  chaseCards: number | null;
+  cardsAbove50: number | null;
+  /** Price change over 7 days, in percent. */
+  change7d: number | null;
 }
 
 export function toSummary(
   pe: ProductEv,
-  ctx: { sets: SetRow[]; games: Game[]; sources: Map<string, DataSource> },
+  ctx: {
+    sets: SetRow[];
+    games: Game[];
+    sources: Map<string, DataSource>;
+    setStats?: Map<string, { top5_value: number; chase_cards: number; cards_above_50: number }>;
+    changes?: Map<string, { pct_change: number | null }>;
+  },
 ): ProductSummary {
   const p = pe.product;
   const set = ctx.sets.find((s) => s.id === p.set_id);
+  const stats = p.set_id ? ctx.setStats?.get(p.set_id) : undefined;
+  const top5Value = stats && stats.top5_value > 0 ? stats.top5_value : null;
   return {
     id: p.id,
     slug: p.slug,
@@ -67,6 +84,11 @@ export function toSummary(
     net: pe.returns.netEv?.toFixed(2) ?? null,
     netPct: pe.returns.netReturnPct?.toFixed(2) ?? null,
     isSample: p.is_sample,
+    top5Value,
+    top5Ratio: topValueRatio(top5Value, p.current_price === null ? null : Number(p.current_price)),
+    chaseCards: stats?.chase_cards ?? null,
+    cardsAbove50: stats?.cards_above_50 ?? null,
+    change7d: ctx.changes?.get(p.id)?.pct_change ?? null,
   };
 }
 
@@ -80,7 +102,7 @@ export interface ProductFilters {
   minRatio?: number;
   net?: "positive" | "negative";
   confidence?: ConfidenceLevel;
-  sort?: "ratio" | "ev" | "price" | "net" | "release";
+  sort?: "ratio" | "ev" | "price" | "net" | "release" | "top5" | "change";
 }
 
 const CONF_RANK: Record<ConfidenceLevel, number> = { insufficient: 0, low: 1, medium: 2, high: 3 };
@@ -119,6 +141,10 @@ export function filterProducts(items: ProductSummary[], f: ProductFilters): Prod
       return out.sort(by((p) => num(p.price), 1));
     case "net":
       return out.sort(by((p) => num(p.netPct), -1));
+    case "top5":
+      return out.sort(by((p) => p.top5Ratio, -1));
+    case "change":
+      return out.sort(by((p) => p.change7d, 1));
     case "release":
       return out.sort(by((p) => (p.releaseDate ? Date.parse(p.releaseDate) : null), -1));
     default:

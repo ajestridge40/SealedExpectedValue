@@ -204,6 +204,64 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
     expect(second.rows[0].id).toBeNull();
   });
 
+  it("computes set stats and sealed price changes from stored prices", async () => {
+    const { rows: setRows } = await db.query(`select id, game_id from public.sets where name = 'Surging Sparks'`);
+    const set = setRows[0];
+    const { rows: src } = await db.query(`select id from public.data_sources where slug = 'manual'`);
+    // Six cards: two printings of one card, five more with increasing prices.
+    for (const [i, price, printing, rarity] of [
+      [1, 100, "Holofoil", "Special Illustration Rare"],
+      [1, 5, "Reverse Holofoil", "Special Illustration Rare"],
+      [2, 60, "Holofoil", "Hyper Rare"],
+      [3, 30, "Holofoil", "Illustration Rare"],
+      [4, 12, "Holofoil", "Double Rare"],
+      [5, 2, "Normal", "Rare"],
+      [6, 1, "Normal", "Common"],
+    ] as const) {
+      await db.query(
+        `insert into public.cards (game_id, set_id, name, number, rarity, printing, tcgplayer_product_id, current_price)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [set.game_id, set.id, `Card ${i}`, String(i), rarity, printing, 800000 + i, price],
+      );
+    }
+    const stats = await as(
+      "anon",
+      null,
+      async () => (await db.query(`select * from public.set_stats where set_id = $1`, [set.id])).rows[0],
+    );
+    expect(stats).toMatchObject({
+      total_cards: 6,
+      priced_cards: 6,
+      cards_above_10: 4,
+      chase_cards: 3,
+      cards_above_50: 2,
+      alt_art_cards: 3,
+      top5_value: "204.00", // 100 + 60 + 30 + 12 + 2: one value per card, best printing
+    });
+
+    const { rows: prod } = await db.query(
+      `select id from public.sealed_products where slug = 'pokemon-surging-sparks-booster-box'`,
+    );
+    await db.query(
+      `insert into public.price_snapshots (sealed_product_id, source_id, source_kind, market_price, provider_as_of, snapshot_date)
+       values ($1, $2, 'manual', 200, now() - interval '10 days', current_date - 10),
+              ($1, $2, 'manual', 180, now() - interval '1 day', current_date - 1)`,
+      [prod[0].id, src[0].id],
+    );
+    const change = await as(
+      "anon",
+      null,
+      async () =>
+        (
+          await db.query(
+            `select price_now, price_then, pct_change from public.sealed_price_changes(7) where sealed_product_id = $1`,
+            [prod[0].id],
+          )
+        ).rows[0],
+    );
+    expect(change).toEqual({ price_now: "180.00", price_then: "200.00", pct_change: "-10.00" });
+  });
+
   it("deletes a user's data when the account is deleted", async () => {
     await db.query(`delete from auth.users where id = $1`, [ALICE]);
     const { rows } = await db.query(

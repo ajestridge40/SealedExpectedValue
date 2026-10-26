@@ -52,6 +52,8 @@ export function ProductFiltersForm({ f, games, sets }: { f: ProductFilters; game
           <option value="price">Lowest price</option>
           <option value="net">Best net return</option>
           <option value="release">Newest release</option>
+          <option value="top5">Best top-5 cards / price</option>
+          <option value="change">Biggest 7-day drop</option>
         </Select>
       </Field>
       <Field label="Min price" htmlFor="minPrice">

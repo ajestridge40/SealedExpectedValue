@@ -85,6 +85,7 @@ export interface SnapshotPoint {
   captured_at: string;
   provider_as_of: string | null;
   market_price: number | null;
+  low_price: number | null;
   currency: string;
   source_kind: PriceKind;
   source_id: string;

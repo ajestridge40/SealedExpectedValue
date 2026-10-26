@@ -21,7 +21,8 @@
     "user:make-admin": "tsx --env-file-if-exists=.env.local scripts/make-admin.mts",
     "db:setup": "tsx --env-file-if-exists=.env.local scripts/run-sql.mts setup",
     "prices:refresh:force": "tsx --env-file-if-exists=.env.local scripts/refresh-prices.mts --force",
-    "setup": "tsx scripts/setup.mts"
+    "setup": "tsx scripts/setup.mts",
+    "catalog:sync": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

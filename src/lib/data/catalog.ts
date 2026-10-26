@@ -120,7 +120,7 @@ export async function getPriceHistory(
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   let q = supabase
     .from("price_snapshots")
-    .select("captured_at, provider_as_of, market_price, currency, source_kind, source_id")
+    .select("captured_at, provider_as_of, market_price, low_price, currency, source_kind, source_id")
     .gte("captured_at", since)
     .not("market_price", "is", null)
     .order("captured_at");

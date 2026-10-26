@@ -77,6 +77,14 @@ export function ProductCard({
                 )}
               </dd>
             </div>
+            <div title="Sum of the set's five most valuable cards divided by this product's price. A quick set-strength indicator, not an EV.">
+              <dt className="text-subtle text-[11px]">Top-5 cards / price</dt>
+              <dd className="tabular font-medium">{p.top5Ratio !== null ? formatRatio(p.top5Ratio) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-subtle text-[11px]">7-day change</dt>
+              <dd className="font-medium">{p.change7d !== null ? <Percent value={p.change7d} /> : "—"}</dd>
+            </div>
           </dl>
 
           <div className="mt-auto flex flex-wrap gap-1.5">
@@ -86,6 +94,7 @@ export function ProductCard({
             ) : null}
             <PriceKindBadge kind={p.priceKind} sourceName={p.priceSourceName} />
             <FreshnessBadge asOf={p.priceUpdatedAt} staleAfterHours={staleAfterHours} />
+            {p.chaseCards ? <Badge tone="accent">{p.chaseCards} chase cards ≥ $25</Badge> : null}
             {p.isSample ? <Badge tone="warn">Sample data</Badge> : null}
           </div>
         </div>

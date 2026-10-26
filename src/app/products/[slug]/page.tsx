@@ -21,7 +21,9 @@ import { getProductEvs } from "@/lib/data/ev";
 import { PRODUCT_TYPE_LABELS } from "@/lib/data/types";
 import { isWatching } from "@/lib/data/user";
 import type { CardContribution, EvResult, OutcomeSource } from "@/lib/ev";
-import { formatMoney, formatRatio } from "@/lib/money";
+import { daysSince, listingSpread, momentum, topValueRatio, volatility } from "@/lib/analytics/market";
+import { getSetStats } from "@/lib/data/market";
+import { formatMoney, formatPercent, formatRatio } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/utils";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -52,7 +54,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) notFound();
 
   const path = `/products/${product.slug}`;
-  const [evs, history, sources, sets, games, user, profile, watching, stale] = await Promise.all([
+  const [evs, history, sources, sets, games, user, profile, watching, stale, setStats] = await Promise.all([
     getProductEvs([product.id]),
     getPriceHistory({ productId: product.id }),
     getDataSources(),
@@ -62,6 +64,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     getProfile(),
     isWatching("sealed", product.id),
     staleAfterHours(),
+    getSetStats(),
   ]);
   const pe = evs.get(product.id)!;
   const ev = pe.ev;
@@ -70,6 +73,46 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const currency = product.current_price_currency ?? "USD";
   const source = product.current_price_source_id ? sources.get(product.current_price_source_id) : undefined;
   const showEv = ev && ev.status !== "insufficient";
+
+  // Market signals from stored snapshots (same currency as the current price).
+  const series = history
+    .filter((h) => h.currency === currency && h.market_price !== null)
+    .map((h) => ({ t: h.provider_as_of ?? h.captured_at, price: Number(h.market_price) }));
+  const latestSnap = history.filter((h) => h.currency === currency).at(-1);
+  const stats = product.set_id ? setStats.get(product.set_id) : undefined;
+  const marketPrice = product.current_price === null ? null : Number(product.current_price);
+  const signals = [
+    {
+      label: "30-day change",
+      value: formatPercent(pctOrNull(momentum(series, 30)), { signed: true }),
+      hint: "Needs 30 days of history.",
+    },
+    {
+      label: "90-day change",
+      value: formatPercent(pctOrNull(momentum(series, 90)), { signed: true }),
+      hint: "Needs 90 days of history.",
+    },
+    {
+      label: "30-day volatility",
+      value: formatPercent(pctOrNull(volatility(series, 30))),
+      hint: "Std. deviation ÷ mean of daily prices; needs 3+ days.",
+    },
+    {
+      label: "Listing spread",
+      value: formatPercent(
+        pctOrNull(listingSpread(marketPrice, latestSnap?.low_price == null ? null : Number(latestSnap.low_price))),
+      ),
+      hint: "(Market − lowest listing) ÷ market. Smaller usually means a more liquid product.",
+    },
+    {
+      label: "Set age",
+      value: (() => {
+        const d = daysSince(set?.release_date ?? product.release_date);
+        return d === null ? "—" : `${d.toLocaleString()} days`;
+      })(),
+      hint: "",
+    },
+  ];
 
   const topCards = (ev?.cards ?? [])
     .filter((c) => c.card.price?.amount != null && (c.probabilityAtLeastOne === null || c.probabilityAtLeastOne > 0))
@@ -231,6 +274,59 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Market signals</CardTitle>
+          <CardDescription>
+            From SealedEV&apos;s stored daily prices and the set&apos;s current card prices. Indicators, not
+            predictions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+            {signals.map((x) => (
+              <div key={x.label} title={x.hint || undefined}>
+                <dt className="text-muted text-xs">{x.label}</dt>
+                <dd className="tabular mt-1 font-medium">{x.value}</dd>
+              </div>
+            ))}
+          </dl>
+          {stats ? (
+            <dl className="border-border grid grid-cols-2 gap-3 border-t pt-4 text-sm sm:grid-cols-6">
+              <div>
+                <dt className="text-muted text-xs">Cards in set</dt>
+                <dd className="tabular mt-1 font-medium">{stats.total_cards}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Worth ≥ $10</dt>
+                <dd className="tabular mt-1 font-medium">{stats.cards_above_10}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Chase ≥ $25</dt>
+                <dd className="tabular mt-1 font-medium">{stats.chase_cards}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Worth ≥ $50</dt>
+                <dd className="tabular mt-1 font-medium">{stats.cards_above_50}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Alt-art / chase rarities</dt>
+                <dd className="tabular mt-1 font-medium">{stats.alt_art_cards}</dd>
+              </div>
+              <div title="Sum of the five most valuable cards in the set ÷ this product's price. Not an EV.">
+                <dt className="text-muted text-xs">Top-5 cards / price</dt>
+                <dd className="tabular mt-1 font-medium">
+                  {formatMoney(stats.top5_value, currency)} ({formatRatio(topValueRatio(stats.top5_value, marketPrice))}
+                  )
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-muted text-sm">No card prices for this set yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Top hits */}
       <Card>
@@ -455,4 +551,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       ) : null}
     </div>
   );
+}
+
+function pctOrNull(fraction: number | null): number | null {
+  return fraction === null ? null : fraction * 100;
 }

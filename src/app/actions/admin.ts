@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { runCatalogImport } from "@/lib/catalog/import";
+import { runSetSync } from "@/lib/catalog/sync";
+import { TcgTrackingProvider } from "@/lib/pricing/providers/tcgtracking";
 import { config } from "@/lib/env";
 import { parsePriceCsv } from "@/lib/pricing/csv-import";
 import { PokemonTcgProvider } from "@/lib/pricing/providers/pokemontcg";
@@ -176,6 +178,32 @@ export async function importCatalogNow(_: FormState): Promise<FormState> {
     return attention.length
       ? { error: `${parts.join(", ")}. Needs attention: ${attention.slice(0, 8).join(" | ")}` }
       : { message: `${parts.join(", ")}. Now run a price refresh.` };
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+}
+
+const syncInput = z.object({
+  games: z.array(z.string().regex(/^[a-z-]{2,40}$/)).min(1, "Pick at least one game."),
+  maxSets: z.coerce.number().int().min(1).max(100),
+});
+
+/** Add the latest sets of the chosen games from TCGTracking, then refresh their prices. */
+export async function syncLatestSets(_: FormState, formData: FormData): Promise<FormState> {
+  await requireAdmin();
+  const parsed = syncInput.safeParse({ games: formData.getAll("games"), maxSets: formData.get("maxSets") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const db = createAdminClient();
+    const provider = new TcgTrackingProvider();
+    const sync = await runSetSync(db, { games: parsed.data.games, maxSetsPerGame: parsed.data.maxSets, provider });
+    const ref = await runPriceRefresh(db, { force: true, tcgtracking: provider });
+    revalidatePath("/", "layout");
+    const summary =
+      `${sync.setsCreated.length} set(s) added, ${sync.setsLinked.length} linked, ${sync.productsCreated} sealed product(s), ` +
+      `${sync.import?.cardsUpserted ?? 0} card printings; ${ref.snapshotsWritten} prices saved.`;
+    const problems = [...sync.errors, ...(sync.import?.errors ?? []), ...ref.errors];
+    return problems.length ? { error: `${summary} Issues: ${problems.slice(0, 5).join(" | ")}` } : { message: summary };
   } catch (err) {
     return { error: (err as Error).message };
   }

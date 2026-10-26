@@ -4,6 +4,7 @@ import { FreshnessBadge } from "@/components/badges";
 import { CatalogImage } from "@/components/catalog-image";
 import { Money, Percent } from "@/components/money";
 import { Notice, Stat } from "@/components/page";
+import { PriceValueScatter, RatioBarChart } from "@/components/market-charts";
 import { ProductCard } from "@/components/product-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { getCollection } from "@/lib/data/collection";
 import { getProductSummaries } from "@/lib/data/products";
 import { filterProducts } from "@/lib/data/summaries";
 import { groupPositions } from "@/lib/portfolio/valuation";
+import { formatRatio } from "@/lib/money";
 import { formatDateTime, isStale, param } from "@/lib/utils";
 
 export default async function DashboardPage({
@@ -38,6 +40,28 @@ export default async function DashboardPage({
     .sort((a, b) => Date.parse(b.priceUpdatedAt!) - Date.parse(a.priceUpdatedAt!))
     .slice(0, 6);
   const hasCollection = collection && collection.entries.length > 0;
+
+  // Market overview (booster boxes and other priced sealed products).
+  const priced = products.filter((p) => p.price !== null && Number(p.price) > 0);
+  const withEv = priced.filter((p) => p.ratio !== null && (p.evStatus === "complete" || p.evStatus === "partial"));
+  const boxes = priced.filter((p) => p.productType === "booster_box");
+  // Like the EV ratio when a pull model exists; otherwise the top-5 card value ratio (clearly labelled).
+  const useEv = withEv.length >= 3;
+  const ratioOf = (p: (typeof products)[number]) => (useEv ? Number(p.ratio) : p.top5Ratio);
+  const ratioLabel = useEv ? "EV / price" : "Top-5 cards / price";
+  const ranked = (useEv ? withEv : priced.filter((p) => p.top5Ratio !== null))
+    .slice()
+    .sort((a, b) => (ratioOf(b) ?? 0) - (ratioOf(a) ?? 0));
+  const avgRatio = ranked.length ? ranked.reduce((n, p) => n + (ratioOf(p) ?? 0), 0) / ranked.length : null;
+  const aboveOne = ranked.filter((p) => (ratioOf(p) ?? 0) >= 1).length;
+  const drops = priced
+    .filter((p) => p.change7d !== null && p.change7d < 0)
+    .sort((a, b) => (a.change7d ?? 0) - (b.change7d ?? 0))
+    .slice(0, 8);
+  const strongestSets = boxes
+    .filter((p) => p.top5Value !== null)
+    .sort((a, b) => (b.top5Ratio ?? 0) - (a.top5Ratio ?? 0))
+    .slice(0, 10);
 
   return (
     <div className="flex flex-col gap-8">
@@ -82,6 +106,142 @@ export default async function DashboardPage({
           </Card>
         )}
       </section>
+
+      {priced.length ? (
+        <section aria-labelledby="market" className="flex flex-col gap-4">
+          <div>
+            <h2 id="market" className="text-lg font-semibold">
+              Market overview
+            </h2>
+            <p className="text-muted text-sm">
+              {useEv
+                ? "EV / price uses each product's pull-rate model."
+                : "Few products have pull-rate models yet, so these charts use top-5 card value ÷ price: a quick set-strength indicator, not an EV."}{" "}
+              Above 1.0× means the value exceeds the price.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat
+              label="Priced products"
+              value={priced.length.toLocaleString()}
+              sub={`${boxes.length} booster boxes`}
+            />
+            <Stat label={`Average ${ratioLabel}`} value={formatRatio(avgRatio)} />
+            <Stat label="At or above 1.0×" value={aboveOne.toLocaleString()} sub={`of ${ranked.length} with a ratio`} />
+            <Stat
+              label="Best value"
+              value={<span className="text-base">{ranked[0]?.name ?? "—"}</span>}
+              sub={ranked[0] ? formatRatio(ratioOf(ranked[0])) : undefined}
+            />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>{ratioLabel} (top 25)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RatioBarChart
+                  label={ratioLabel}
+                  data={ranked
+                    .slice(0, 25)
+                    .map((p) => ({ name: p.name, game: p.gameName ?? "", ratio: ratioOf(p) ?? 0 }))}
+                />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Biggest price drops (7 days)</CardTitle>
+                <CardDescription>From stored daily prices.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {drops.length ? (
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {drops.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between gap-3">
+                        <Link href={`/products/${p.slug}`} className="hover:text-accent min-w-0 truncate">
+                          {p.name}
+                        </Link>
+                        <span className="tabular shrink-0">
+                          <Money value={p.price} currency={p.currency} />{" "}
+                          <Percent value={p.change7d} className="text-xs" />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted text-sm">Needs at least a week of daily prices.</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Price vs {useEv ? "estimated EV" : "top-5 card value"}</CardTitle>
+              <CardDescription>Points above the dashed line are worth more than they cost.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PriceValueScatter
+                valueLabel={useEv ? "EV" : "Top-5 value"}
+                data={ranked.slice(0, 200).map((p) => ({
+                  name: p.name,
+                  game: p.gameName ?? "",
+                  price: Number(p.price),
+                  value: useEv ? Number(p.ev) : (p.top5Value ?? 0),
+                }))}
+              />
+            </CardContent>
+          </Card>
+          {strongestSets.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Strongest sets by booster box</CardTitle>
+                <CardDescription>
+                  Card value profile of each box&apos;s set, from current market prices.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="tabular w-full text-sm">
+                    <thead>
+                      <tr className="text-muted text-left text-xs">
+                        <th className="py-2 pr-3 font-medium">Box</th>
+                        <th className="py-2 pr-3 text-right font-medium">Price</th>
+                        <th className="py-2 pr-3 text-right font-medium">Top-5 value</th>
+                        <th className="py-2 pr-3 text-right font-medium">Top-5 / price</th>
+                        <th className="py-2 pr-3 text-right font-medium">Chase ≥ $25</th>
+                        <th className="py-2 text-right font-medium">Cards ≥ $50</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {strongestSets.map((p) => (
+                        <tr key={p.id} className="border-border/60 border-t">
+                          <td className="py-2 pr-3">
+                            <div className="flex items-center gap-2">
+                              <CatalogImage src={p.imageUrl} alt="" aspect="square" className="w-8 shrink-0" />
+                              <Link href={`/products/${p.slug}`} className="hover:text-accent">
+                                {p.name}
+                              </Link>
+                            </div>
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            <Money value={p.price} currency={p.currency} />
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            <Money value={p.top5Value} currency={p.currency} />
+                          </td>
+                          <td className="py-2 pr-3 text-right">{formatRatio(p.top5Ratio)}</td>
+                          <td className="py-2 pr-3 text-right">{p.chaseCards ?? "—"}</td>
+                          <td className="py-2 text-right">{p.cardsAbove50 ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </section>
+      ) : null}
 
       <section aria-labelledby="recent-prices">
         <h2 id="recent-prices" className="mb-3 text-lg font-semibold">

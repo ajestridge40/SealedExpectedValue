@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { CsvImportForm, JobButtons } from "@/components/admin-forms";
+import { CsvImportForm, JobButtons, SyncSetsForm } from "@/components/admin-forms";
+import { getGames } from "@/lib/data/catalog";
 import { PageHeader, Stat } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,19 @@ export default async function AdminPage() {
         </CardHeader>
         <CardContent>
           <JobButtons />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Add the latest sets</CardTitle>
+          <CardDescription>
+            Pulls the most recent sets of each game from TCGTracking with their sealed products, every card and images,
+            then refreshes prices. New products have no pull-rate model yet, so they show market data and set stats
+            rather than an EV.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SyncSetsForm games={(await getGames()).map((g) => ({ slug: g.slug, name: g.name }))} />
         </CardContent>
       </Card>
       <Card>

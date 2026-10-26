@@ -20,6 +20,6 @@ export function parseProductFilters(sp: Record<string, string | string[] | undef
     minRatio: opt(num, param(sp, "minRatio")),
     net: opt(z.enum(["positive", "negative"]), param(sp, "net")),
     confidence: opt(z.enum(["high", "medium", "low", "insufficient"]), param(sp, "confidence")),
-    sort: opt(z.enum(["ratio", "ev", "price", "net", "release"]), param(sp, "sort")),
+    sort: opt(z.enum(["ratio", "ev", "price", "net", "release", "top5", "change"]), param(sp, "sort")),
   };
 }

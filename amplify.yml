@@ -10,7 +10,7 @@ frontend:
       commands:
         # Amplify exposes console env vars at build time; write the server-side
         # ones to .env.production so the Next.js server runtime can read them.
-        - env | grep -E '^(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|CRON_SECRET|ENABLE_TCGCSV|ENABLE_POKEMONTCG|POKEMONTCG_API_KEY|PRICE_REFRESH_MIN_INTERVAL_HOURS)=' >> .env.production || true
+        - env | grep -E '^(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|CRON_SECRET|ENABLE_TCGTRACKING|TCGTRACKING_BASE_URL|ENABLE_POKEMONTCG|POKEMONTCG_API_KEY|PRICE_REFRESH_MIN_INTERVAL_HOURS)=' >> .env.production || true
         - npm run build
   artifacts:
     baseDirectory: .next

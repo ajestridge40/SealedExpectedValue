@@ -13,6 +13,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline";
 import { createClient } from "@supabase/supabase-js";
 import { runCatalogImport } from "../src/lib/catalog/import.ts";
+import { runSetSync } from "../src/lib/catalog/sync.ts";
 import { runPriceRefresh } from "../src/lib/pricing/refresh.ts";
 import { TcgTrackingProvider } from "../src/lib/pricing/providers/tcgtracking.ts";
 import { SEED_FILE, applyFiles, connect, migrate } from "./db.mts";
@@ -29,6 +30,10 @@ function parseEnv(text: string): Record<string, string> {
 }
 
 type Lines = AsyncIterator<string>;
+
+// One line reader for the whole run (works for typed input and piped input).
+let lineReader: Lines | null = null;
+const lines = (): Lines => (lineReader ??= createInterface({ input, terminal: false })[Symbol.asyncIterator]());
 
 async function ask(lines: Lines, question: string, check: (v: string) => string | null) {
   for (;;) {
@@ -56,21 +61,19 @@ if (existsSync(ENV_FILE)) {
     "You need a Supabase project (free): https://supabase.com/dashboard → New project.\n" +
       "Then open your project and click “Connect” (top bar) and Project Settings → API Keys.\n",
   );
-  const rl = createInterface({ input, terminal: false });
-  const lines: Lines = rl[Symbol.asyncIterator]();
-  const url = await ask(lines, "Project URL (https://<ref>.supabase.co): ", (v) =>
+  const url = await ask(lines(), "Project URL (https://<ref>.supabase.co): ", (v) =>
     /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(v) || /^http:\/\/(localhost|127\.0\.0\.1):\d+\/?$/.test(v)
       ? null
       : "Expected something like https://abcdefgh.supabase.co",
   );
-  const anon = await ask(lines, "Publishable key (sb_publishable_…) or legacy anon key: ", (v) =>
+  const anon = await ask(lines(), "Publishable key (sb_publishable_…) or legacy anon key: ", (v) =>
     v.length >= 20 ? null : "That looks too short.",
   );
-  const secret = await ask(lines, "Secret key (sb_secret_…) or legacy service_role key: ", (v) =>
+  const secret = await ask(lines(), "Secret key (sb_secret_…) or legacy service_role key: ", (v) =>
     v.length >= 20 ? null : "That looks too short.",
   );
   const db = await ask(
-    lines,
+    lines(),
     "Database connection string — use “Session pooler” (postgresql://postgres.<ref>:<password>@…pooler.supabase.com:5432/postgres)\n" +
       "  (replace [YOUR-PASSWORD] with your database password): ",
     (v) =>
@@ -80,7 +83,6 @@ if (existsSync(ENV_FILE)) {
           ? "Replace [YOUR-PASSWORD] with your database password."
           : null,
   );
-  rl.close();
   env = {
     NEXT_PUBLIC_SUPABASE_URL: url.replace(/\/$/, ""),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
@@ -140,6 +142,25 @@ console.log(
 );
 for (const n of [...imp.needsAttention, ...imp.errors]) console.log(`  ! ${n}`);
 
+console.log(
+  "\nAdd the latest sets automatically (sealed products, cards, images)?\n" +
+    "  Games: pokemon, one-piece, lorcana, star-wars-unlimited, riftbound, mtg, yugioh",
+);
+const gamesAnswer = await ask(lines(), "Games, comma-separated [pokemon] (or 'none'): ", (v) =>
+  v === "" || /^(none|[a-z-]+(\s*,\s*[a-z-]+)*)$/i.test(v) ? null : "Use game names separated by commas, or 'none'.",
+);
+if (gamesAnswer.toLowerCase() !== "none") {
+  const maxAnswer = await ask(lines(), "How many recent sets per game? [10]: ", (v) =>
+    v === "" || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 200) ? null : "Enter a number from 1 to 200.",
+  );
+  const games = (gamesAnswer || "pokemon").split(",").map((g) => g.trim().toLowerCase());
+  const sync = await runSetSync(admin, { games, maxSetsPerGame: Number(maxAnswer || 10), provider: tcgtracking });
+  console.log(
+    `  ${sync.setsCreated.length} set(s) added, ${sync.productsCreated} sealed product(s), ${sync.import?.cardsUpserted ?? 0} card printings`,
+  );
+  for (const e of [...sync.errors, ...(sync.import?.errors ?? [])]) console.log(`  ! ${e}`);
+}
+
 console.log("Refreshing prices…");
 const ref = await runPriceRefresh(admin, { force: true, tcgtracking });
 console.log(`  ${ref.status}: ${ref.snapshotsWritten} prices from ${ref.setsProcessed} set(s)`);
@@ -150,8 +171,11 @@ Done. Next:
   npm run dev                      then open http://localhost:3000
   Sign up in the app, then make yourself an admin:
   npm run user:make-admin you@example.com
+  npm run catalog:sync pokemon,lorcana 15   add more recent sets any time
 
 Tip: in Supabase → Authentication → URL Configuration, set Site URL to http://localhost:3000 and add
 http://localhost:3000/auth/callback to Redirect URLs (or turn off “Confirm email” under Sign In / Providers → Email
 while testing locally).
 `);
+
+process.exit(0);
