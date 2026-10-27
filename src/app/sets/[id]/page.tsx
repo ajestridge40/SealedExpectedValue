@@ -59,7 +59,7 @@ export default async function SetPage({ params }: { params: Promise<{ id: string
           sub={`Top-5 / box ${formatRatio(set.box_top5_ratio)}`}
         />
         <Stat
-          label="Cards"
+          label="Cards stored"
           value={set.total_cards.toLocaleString()}
           sub={`${set.priced_cards.toLocaleString()} priced · ${set.chase_cards} worth $25+`}
         />

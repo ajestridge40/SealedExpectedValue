@@ -1,5 +1,5 @@
-# Weekly catalog sync: adds the booster boxes of new sets of every game (with
-# images and prices); untick "Booster boxes only" for every product and card. Sets loaded in the last 7 days are skipped, so a run that
+# Weekly catalog sync: booster boxes and each set's 25 most valuable cards for
+# every game (with images and prices); untick the option for every product and card. Sets loaded in the last 7 days are skipped, so a run that
 # times out continues where it stopped next time. Start it by hand
 # (Actions → Sync catalog → Run workflow) for the first full load.
 # Needs repository secrets NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
@@ -16,7 +16,7 @@ on:
         description: "Newest sets per game (0 = every set)"
         default: "0"
       booster_boxes_only:
-        description: "Booster boxes only (skip other sealed products and single cards)"
+        description: "Booster boxes and each set's 25 most valuable cards only"
         type: boolean
         default: true
       force:
@@ -43,7 +43,7 @@ jobs:
         env:
           GAMES: ${{ inputs.games || 'all' }}
           MAX_SETS: ${{ inputs.max_sets || '0' }}
-          # Scheduled runs have no inputs: booster boxes only.
+          # Scheduled runs have no inputs: booster boxes and top cards only.
           BOXES: ${{ (github.event_name == 'schedule' || inputs.booster_boxes_only) && 'boxes' || '' }}
           FORCE: ${{ inputs.force && 'force' || '' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

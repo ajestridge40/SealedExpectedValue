@@ -148,7 +148,7 @@ for (const n of [...imp.needsAttention, ...imp.errors]) console.log(`  ! ${n}`);
 console.log(
   "\nAdd sets automatically (sealed products, every card, images and prices)?\n" +
     "  Games: all, pokemon, mtg, yugioh, one-piece, lorcana, star-wars-unlimited, riftbound\n" +
-    "  'all' with 0 sets loads every set of every game. Booster boxes only takes a fraction of the time;\n" +
+    "  'all' with 0 sets loads every set of every game. Booster boxes + top 25 cards per set takes a fraction of the time;\n" +
     "  everything (all products and cards) takes hours and several GB. Both can be stopped and resumed.",
 );
 const gamesAnswer = await ask(lines(), "Games, comma-separated, or 'all' [pokemon] (or 'none'): ", (v) =>
@@ -160,7 +160,7 @@ if (gamesAnswer.toLowerCase() !== "none") {
   const maxAnswer = await ask(lines(), "How many recent sets per game? 0 = every set [10]: ", (v) =>
     v === "" || (/^\d+$/.test(v) && Number(v) <= 10_000) ? null : "Enter a number (0 = every set).",
   );
-  const boxesAnswer = await ask(lines(), "Booster boxes only (much faster)? [Y/n]: ", (v) =>
+  const boxesAnswer = await ask(lines(), "Booster boxes and top 25 cards per set only (much faster)? [Y/n]: ", (v) =>
     /^(y|yes|n|no)?$/i.test(v) ? null : "Answer y or n.",
   );
   const games =
@@ -191,7 +191,7 @@ Done. Next:
   Sign up in the app, then make yourself an admin:
   npm run user:make-admin you@example.com
   npm run catalog:sync pokemon,lorcana 15   add more recent sets any time
-  npm run catalog:sync:all                  booster boxes of every set of every game (resumable)
+  npm run catalog:sync:all                  booster boxes + top 25 cards of every set of every game (resumable)
   npm run catalog:sync:full                 every product and card of every game (hours)
 
 Tip: in Supabase → Authentication → URL Configuration, set Site URL to http://localhost:3000 and add

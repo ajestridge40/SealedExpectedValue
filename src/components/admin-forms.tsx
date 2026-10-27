@@ -109,7 +109,7 @@ export function SyncSetsForm({ games }: { games: { slug: string; name: string }[
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="boxes" value="1" defaultChecked className="accent-[var(--color-accent)]" />
-        Booster boxes only (much faster; skips other sealed products and single cards)
+        Booster boxes and each set’s 25 most valuable cards only (much faster)
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="force" value="1" className="accent-[var(--color-accent)]" />

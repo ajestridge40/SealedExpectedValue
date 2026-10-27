@@ -68,7 +68,32 @@ export interface CardUpsert {
 }
 
 /** One catalog row per card x printing that TCGplayer prices separately. */
-export function cardRowsFromGroup(products: TcgProduct[], prices: TcgPrice[]): CardUpsert[] {
+/**
+ * The `n` cards with the highest market price (best printing) in a set. Used to
+ * store only each set's valuable cards: past the top few dozen, cards rarely
+ * matter for a box's value.
+ */
+export function mostValuableCardIds(products: TcgProduct[], prices: TcgPrice[], n: number): Set<number> {
+  const cardIds = new Set(products.filter(isCardProduct).map((p) => p.productId));
+  const best = new Map<number, number>();
+  for (const p of prices) {
+    if (!cardIds.has(p.productId) || p.marketPrice === null) continue;
+    best.set(p.productId, Math.max(best.get(p.productId) ?? 0, p.marketPrice));
+  }
+  return new Set(
+    [...best]
+      .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      .slice(0, n)
+      .map(([id]) => id),
+  );
+}
+
+export function cardRowsFromGroup(
+  products: TcgProduct[],
+  prices: TcgPrice[],
+  opts: { topCards?: number } = {},
+): CardUpsert[] {
+  const keep = opts.topCards ? mostValuableCardIds(products, prices, opts.topCards) : null;
   const printingsById = new Map<number, Set<string>>();
   for (const p of prices) {
     const set = printingsById.get(p.productId) ?? new Set<string>();
@@ -77,7 +102,7 @@ export function cardRowsFromGroup(products: TcgProduct[], prices: TcgPrice[]): C
   }
   const rows: CardUpsert[] = [];
   for (const p of products) {
-    if (!isCardProduct(p)) continue;
+    if (!isCardProduct(p) || (keep && !keep.has(p.productId))) continue;
     const ext = (k: string) => p.extendedData?.find((e) => e.name === k)?.value ?? null;
     for (const printing of printingsById.get(p.productId) ?? new Set(["Normal"])) {
       rows.push({

@@ -21,7 +21,12 @@ export interface ImportReport {
 
 export async function runCatalogImport(
   db: SupabaseClient,
-  opts: { provider?: TcgTrackingProvider; setIds?: string[] } = {},
+  opts: {
+    provider?: TcgTrackingProvider;
+    setIds?: string[];
+    /** Only import the set's N most valuable cards (all cards when omitted). */
+    topCards?: number;
+  } = {},
 ): Promise<ImportReport> {
   const provider = opts.provider ?? new TcgTrackingProvider();
   const report: ImportReport = { setsLinked: [], productsLinked: [], cardsUpserted: 0, needsAttention: [], errors: [] };
@@ -95,7 +100,11 @@ export async function runCatalogImport(
       }
 
       // Single cards
-      const rows = cardRowsFromGroup(products, prices).map((r) => ({ ...r, game_id: set.game_id, set_id: set.id }));
+      const rows = cardRowsFromGroup(products, prices, { topCards: opts.topCards }).map((r) => ({
+        ...r,
+        game_id: set.game_id,
+        set_id: set.id,
+      }));
       for (let i = 0; i < rows.length; i += 500) {
         const { error: cErr } = await db
           .from("cards")

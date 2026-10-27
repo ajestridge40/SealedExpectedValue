@@ -4,7 +4,7 @@
  * last 7 days are skipped, so re-running after a stop continues where it left off.
  *   npm run catalog:sync                       # Pokémon, latest 10 sets
  *   npm run catalog:sync pokemon,lorcana 15    # games (comma-separated), sets per game
- *   npm run catalog:sync:all                   # every game, every set: booster boxes only (fast)
+ *   npm run catalog:sync:all                   # every game, every set: booster boxes + top 25 cards (fast)
  *   npm run catalog:sync all 0 boxes           # same
  *   npm run catalog:sync all 0                 # every game, every set, every product and card (hours)
  *   npm run catalog:sync all 0 force           # reload sets even if loaded recently
@@ -24,7 +24,7 @@ const maxSets = Number(args.find((a) => /^\d+$/.test(a)) ?? 10);
 
 console.log(
   `Syncing ${maxSets > 0 ? `the latest ${maxSets} set(s)` : "every set"} for ${games === "all" ? "every game" : games.join(", ")}` +
-    `${boosterBoxesOnly ? ", booster boxes only" : ""}${force ? " (force)" : ""} …`,
+    `${boosterBoxesOnly ? ", booster boxes and top 25 cards only" : ""}${force ? " (force)" : ""} …`,
 );
 const started = Date.now();
 const sync = await runSetSync(adminClient(), {

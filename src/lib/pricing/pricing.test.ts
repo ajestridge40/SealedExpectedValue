@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { cardRowsFromGroup, matchGroup, matchSealedProduct, normalizeName } from "../catalog/match";
+import {
+  cardRowsFromGroup,
+  matchGroup,
+  matchSealedProduct,
+  mostValuableCardIds,
+  normalizeName,
+} from "../catalog/match";
 import { escapeCsvCell, toCsv } from "../csv";
 import { parsePriceCsv } from "./csv-import";
 import { fetchJson } from "./http";
@@ -278,6 +284,50 @@ describe("catalog matching", () => {
     expect(safeImageUrl("//tcgplayer-cdn.tcgplayer.com/set_icon/x.png")).toBe(
       "https://tcgplayer-cdn.tcgplayer.com/set_icon/x.png",
     );
+  });
+});
+
+describe("top cards per set", () => {
+  const product = (id: number, card = true): TcgProduct => ({
+    productId: id,
+    sourceId: id,
+    name: card ? `Card ${id} - ${id}/100` : `Box ${id}`,
+    cleanName: null,
+    imageUrl: null,
+    categoryId: 3,
+    groupId: 1,
+    url: null,
+    extendedData: card ? [{ name: "Number", value: `${id}/100` }] : [],
+  });
+  const price = (id: number, marketPrice: number | null, subTypeName = "Holofoil"): TcgPrice => ({
+    productId: id,
+    lowPrice: null,
+    marketPrice,
+    subTypeName,
+  });
+  const products = [product(1), product(2), product(3), product(4), product(99, false)];
+  const prices = [
+    price(1, 5),
+    price(1, 40, "Reverse Holofoil"), // best printing counts
+    price(2, 20),
+    price(3, null),
+    price(4, 30),
+    price(99, 500), // sealed product, never a "card"
+  ];
+
+  it("ranks cards by their best printing and ignores sealed and unpriced products", () => {
+    expect([...mostValuableCardIds(products, prices, 2)]).toEqual([1, 4]);
+    expect([...mostValuableCardIds(products, prices, 10)]).toEqual([1, 4, 2]);
+  });
+
+  it("keeps every printing of the top cards only", () => {
+    const rows = cardRowsFromGroup(products, prices, { topCards: 2 });
+    expect(rows.map((r) => [r.tcgplayer_product_id, r.printing])).toEqual([
+      [1, "Holofoil"],
+      [1, "Reverse Holofoil"],
+      [4, "Holofoil"],
+    ]);
+    expect(cardRowsFromGroup(products, prices)).toHaveLength(5);
   });
 });
 

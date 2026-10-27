@@ -147,14 +147,17 @@ SealedEV can store every set, sealed product and card printing (with images and 
 covers, so all users read prices from your database and nothing calls the API while pages render:
 
 ```powershell
-npm run catalog:sync:all          # booster boxes of every set of every game (fast)
+npm run catalog:sync:all          # booster boxes + top 25 cards of every set of every game (fast)
 npm run catalog:sync:full         # everything: every sealed product and card printing (hours)
 ```
 
-`catalog:sync:all` adds only **booster boxes** (with set logos and prices) and skips sets that have no booster box, so
-it finishes in a fraction of the time and uses little space. Booster boxes added this way show market price and price
-changes; the top-5 card value and EV need the set's cards, which `catalog:sync:full` (or
-`npm run catalog:sync pokemon 10` for chosen games) adds later. Existing sets keep their cards.
+`catalog:sync:all` adds only **booster boxes** and each set's **25 most valuable cards** (with images, set logos and
+prices), and skips sets that have no booster box. The card data comes in the same download as the box, so it finishes in
+a fraction of the full load's time and uses little space, and every box still gets its **top-5 card value ÷ price**
+and set stats (chase cards, top card). Past the top 25 a set's cards rarely matter for a box's value. Set stats then
+count only the stored cards, and the top 25 is re-checked when the weekly sync reloads the set. Every card of chosen
+games: `npm run catalog:sync pokemon 0 force`; everything: `catalog:sync:full`. EV (from pull rates) still needs a
+pull-rate model per product; see `docs/EV_METHODOLOGY.md`.
 
 - **Resumable.** Each set is saved as soon as it is loaded, and sets loaded in the last 7 days are skipped, so you can
   stop it (Ctrl+C) and run the same command again to continue. Add `force` (`npm run catalog:sync all 0 force`) to
@@ -181,7 +184,7 @@ include 2,000 minutes a month):
 
 - **Refresh prices** (`refresh-prices.yml`): daily at 07:17 UTC.
 - **Sync catalog** (`catalog-sync.yml`): Mondays, adds the booster boxes of new sets of every game. Run it by hand the first
-  time (GitHub → **Actions** → **Sync catalog** → **Run workflow**; untick “Booster boxes only” for everything) to load the catalog without keeping your
+  time (GitHub → **Actions** → **Sync catalog** → **Run workflow**; untick “Booster boxes and top cards only” for everything) to load the catalog without keeping your
   computer on. Long first loads continue on the next run.
 
 Add two repository secrets (GitHub → **Settings** → **Secrets and variables** → **Actions** → **New repository

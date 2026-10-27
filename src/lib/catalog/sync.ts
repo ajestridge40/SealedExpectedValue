@@ -65,10 +65,14 @@ export interface SyncOptions {
   /** Also store each set's prices while syncing (default true). */
   withPrices?: boolean;
   /**
-   * Only add booster boxes: skip other sealed products and single cards, and
-   * don't add sets that have no booster box. Much faster than a full load.
+   * Only add booster boxes and each set's most valuable cards (topCardsPerSet):
+   * skip other sealed products, and don't add sets that have no booster box.
+   * Much faster and smaller than a full load, and still gives every box its
+   * top-5 card value.
    */
   boosterBoxesOnly?: boolean;
+  /** Cards kept per set in booster-boxes-only mode (default 25). */
+  topCardsPerSet?: number;
   /** Stop starting new sets after this long; run again to continue. */
   timeBudgetMs?: number;
   log?: (message: string) => void;
@@ -288,8 +292,13 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
           else report.productsCreated += rows.length;
         }
 
-        // 3. Every card (one row per printing) with images (skipped for booster boxes only).
-        const imp = opts.boosterBoxesOnly ? emptyImport() : await runCatalogImport(db, { provider, setIds: [set.id] });
+        // 3. Cards (one row per printing) with images: every card, or only the
+        //    most valuable ones in booster-boxes-only mode.
+        const imp = await runCatalogImport(db, {
+          provider,
+          setIds: [set.id],
+          topCards: opts.boosterBoxesOnly ? (opts.topCardsPerSet ?? 25) : undefined,
+        });
         report.import.cardsUpserted += imp.cardsUpserted;
         report.import.productsLinked.push(...imp.productsLinked);
         report.import.needsAttention.push(...imp.needsAttention);
@@ -314,7 +323,9 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
         report.setsProcessed++;
         opts.log?.(
           `${game.name} [${i + 1}/${groups.length}] ${g.name}: ` +
-            (opts.boosterBoxesOnly ? `${rows.length} new booster box(es)` : `${imp.cardsUpserted} card printings`),
+            (opts.boosterBoxesOnly
+              ? `${rows.length} new booster box(es), top cards: ${imp.cardsUpserted} printings`
+              : `${imp.cardsUpserted} card printings`),
         );
       } catch (err) {
         report.errors.push(`${g.name}: ${(err as Error).message}`);
