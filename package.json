@@ -23,7 +23,8 @@
     "prices:refresh:force": "tsx --env-file-if-exists=.env.local scripts/refresh-prices.mts --force",
     "setup": "tsx scripts/setup.mts",
     "catalog:sync": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts",
-    "catalog:sync:all": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts all 0",
+    "catalog:sync:all": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts all 0 boxes",
+    "catalog:sync:full": "tsx --env-file-if-exists=.env.local scripts/catalog-sync.mts all 0",
     "tcgtracking:check": "tsx scripts/tcgtracking-check.mts"
   },
   "dependencies": {

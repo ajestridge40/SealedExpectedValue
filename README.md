@@ -147,8 +147,14 @@ SealedEV can store every set, sealed product and card printing (with images and 
 covers, so all users read prices from your database and nothing calls the API while pages render:
 
 ```powershell
-npm run catalog:sync:all          # every game, every set; same as: npm run catalog:sync all 0
+npm run catalog:sync:all          # booster boxes of every set of every game (fast)
+npm run catalog:sync:full         # everything: every sealed product and card printing (hours)
 ```
+
+`catalog:sync:all` adds only **booster boxes** (with set logos and prices) and skips sets that have no booster box, so
+it finishes in a fraction of the time and uses little space. Booster boxes added this way show market price and price
+changes; the top-5 card value and EV need the set's cards, which `catalog:sync:full` (or
+`npm run catalog:sync pokemon 10` for chosen games) adds later. Existing sets keep their cards.
 
 - **Resumable.** Each set is saved as soon as it is loaded, and sets loaded in the last 7 days are skipped, so you can
   stop it (Ctrl+C) and run the same command again to continue. Add `force` (`npm run catalog:sync all 0 force`) to
@@ -174,8 +180,8 @@ Two workflows in `.github/workflows` run on GitHub's servers (free for public re
 include 2,000 minutes a month):
 
 - **Refresh prices** (`refresh-prices.yml`): daily at 07:17 UTC.
-- **Sync catalog** (`catalog-sync.yml`): Mondays, adds new sets and products of every game. Run it by hand the first
-  time (GitHub → **Actions** → **Sync catalog** → **Run workflow**) to load the full catalog without keeping your
+- **Sync catalog** (`catalog-sync.yml`): Mondays, adds the booster boxes of new sets of every game. Run it by hand the first
+  time (GitHub → **Actions** → **Sync catalog** → **Run workflow**; untick “Booster boxes only” for everything) to load the catalog without keeping your
   computer on. Long first loads continue on the next run.
 
 Add two repository secrets (GitHub → **Settings** → **Secrets and variables** → **Actions** → **New repository

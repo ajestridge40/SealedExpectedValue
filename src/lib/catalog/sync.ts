@@ -42,6 +42,8 @@ export interface SyncReport {
   setsProcessed: number;
   /** Sets skipped because they were synced recently (use force to redo). */
   setsSkipped: number;
+  /** Booster-boxes-only runs: sets without a booster box, not added. */
+  setsWithoutBoxes: number;
   /** Sets not reached before the time budget ran out (run again to continue). */
   setsRemaining: number;
   productsCreated: number;
@@ -62,6 +64,11 @@ export interface SyncOptions {
   force?: boolean;
   /** Also store each set's prices while syncing (default true). */
   withPrices?: boolean;
+  /**
+   * Only add booster boxes: skip other sealed products and single cards, and
+   * don't add sets that have no booster box. Much faster than a full load.
+   */
+  boosterBoxesOnly?: boolean;
   /** Stop starting new sets after this long; run again to continue. */
   timeBudgetMs?: number;
   log?: (message: string) => void;
@@ -125,6 +132,7 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
     setsLinked: [],
     setsProcessed: 0,
     setsSkipped: 0,
+    setsWithoutBoxes: 0,
     setsRemaining: 0,
     productsCreated: 0,
     pricesWritten: 0,
@@ -183,6 +191,24 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
       try {
         // 1. The set itself: link or create, and keep its images current.
         let set = sets.find((s) => s.tcgplayer_group_id === g.groupId);
+        if (
+          set?.catalog_synced_at &&
+          now.getTime() - Date.parse(set.catalog_synced_at) < RESYNC_AFTER_MS &&
+          !opts.force
+        ) {
+          report.setsSkipped++;
+          continue;
+        }
+        const products = (await provider.products(categoryId, g.groupId)).filter((p) => !isCardProduct(p));
+        const wanted = (p: { name: string }) => {
+          const kind = classifySealed(p.name);
+          return kind && (!opts.boosterBoxesOnly || kind.type === "booster_box") ? kind : null;
+        };
+        if (!set && opts.boosterBoxesOnly && !products.some(wanted)) {
+          report.setsWithoutBoxes++;
+          provider.forgetSet(categoryId, g.groupId);
+          continue;
+        }
         if (!set) {
           const unlinked = sets.filter((s) => !s.tcgplayer_group_id);
           const m = matchGroup(
@@ -224,14 +250,7 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
             .eq("id", set.id);
         }
 
-        const recent = set.catalog_synced_at && now.getTime() - Date.parse(set.catalog_synced_at) < RESYNC_AFTER_MS;
-        if (recent && !opts.force) {
-          report.setsSkipped++;
-          continue;
-        }
-
         // 2. Sealed products not yet in the catalog (and images for those that are).
-        const products = (await provider.products(categoryId, g.groupId)).filter((p) => !isCardProduct(p));
         const known = await inBatches(
           products.map((p) => p.productId),
           (batch) =>
@@ -245,7 +264,7 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
         }
         const rows = products.flatMap((p) => {
           if (knownById.has(p.productId)) return [];
-          const kind = classifySealed(p.name);
+          const kind = wanted(p);
           if (!kind) return [];
           return [
             {
@@ -269,8 +288,8 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
           else report.productsCreated += rows.length;
         }
 
-        // 3. Every card (one row per printing) with images.
-        const imp = await runCatalogImport(db, { provider, setIds: [set.id] });
+        // 3. Every card (one row per printing) with images (skipped for booster boxes only).
+        const imp = opts.boosterBoxesOnly ? emptyImport() : await runCatalogImport(db, { provider, setIds: [set.id] });
         report.import.cardsUpserted += imp.cardsUpserted;
         report.import.productsLinked.push(...imp.productsLinked);
         report.import.needsAttention.push(...imp.needsAttention);
@@ -293,7 +312,10 @@ export async function runSetSync(db: SupabaseClient, opts: SyncOptions): Promise
         await db.from("sets").update({ catalog_synced_at: now.toISOString() }).eq("id", set.id);
         set.catalog_synced_at = now.toISOString();
         report.setsProcessed++;
-        opts.log?.(`${game.name} [${i + 1}/${groups.length}] ${g.name}: ${imp.cardsUpserted} card printings`);
+        opts.log?.(
+          `${game.name} [${i + 1}/${groups.length}] ${g.name}: ` +
+            (opts.boosterBoxesOnly ? `${rows.length} new booster box(es)` : `${imp.cardsUpserted} card printings`),
+        );
       } catch (err) {
         report.errors.push(`${g.name}: ${(err as Error).message}`);
         provider.forgetSet(categoryId, g.groupId);

@@ -193,6 +193,7 @@ const syncInput = z.object({
   games: z.array(z.string().regex(/^[a-z0-9-]{2,50}$/)).min(1, "Pick at least one game."),
   maxSets: z.coerce.number().int().min(0).max(10_000),
   force: z.boolean(),
+  boxes: z.boolean(),
 });
 
 /**
@@ -207,15 +208,17 @@ export async function syncLatestSets(_: FormState, formData: FormData): Promise<
     games: formData.getAll("games"),
     maxSets: formData.get("maxSets"),
     force: formData.get("force") === "1",
+    boxes: formData.get("boxes") === "1",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {
-    const { games, maxSets, force } = parsed.data;
+    const { games, maxSets, force, boxes } = parsed.data;
     const sync = await runSetSync(createAdminClient(), {
       games: games.includes("all") ? "all" : games,
       maxSetsPerGame: maxSets,
       provider: new TcgTrackingProvider(),
       force,
+      boosterBoxesOnly: boxes,
       timeBudgetMs: 240_000,
     });
     revalidatePath("/", "layout");
