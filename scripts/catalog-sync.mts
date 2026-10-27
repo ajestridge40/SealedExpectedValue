@@ -27,14 +27,24 @@ console.log(
     `${boosterBoxesOnly ? ", booster boxes and top 25 cards only" : ""}${force ? " (force)" : ""} …`,
 );
 const started = Date.now();
-const sync = await runSetSync(adminClient(), {
-  games,
-  maxSetsPerGame: maxSets,
-  provider: new TcgTrackingProvider(),
-  force,
-  boosterBoxesOnly,
-  log: (m) => console.log(`  ${m}`),
-});
+const sync = await (async () => {
+  try {
+    return await runSetSync(adminClient(), {
+      games,
+      maxSetsPerGame: maxSets,
+      provider: new TcgTrackingProvider(),
+      force,
+      boosterBoxesOnly,
+      log: (m) => console.log(`  ${m}`),
+    });
+  } catch (err) {
+    const message = (err as Error).message;
+    console.error(`\n${message}`);
+    if (/does not exist|schema cache/i.test(message))
+      console.error("\nYour database is missing the latest update. Run `npm run db:setup`, then this command again.");
+    process.exit(1);
+  }
+})();
 const minutes = ((Date.now() - started) / 60_000).toFixed(1);
 console.log(
   `\nDone in ${minutes} min: ${sync.setsProcessed} set(s) loaded, ${sync.setsSkipped} skipped (loaded in the last 7 days), ` +
