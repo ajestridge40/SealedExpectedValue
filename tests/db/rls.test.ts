@@ -224,6 +224,16 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
         [set.game_id, set.id, `Card ${i}`, String(i), rarity, printing, 800000 + i, price],
       );
     }
+    await db.query(`update public.sets set image_url = null where id = $1`, [set.id]);
+    await db.query(
+      `update public.cards set image_url = 'https://cdn.example.com/card-' || number || '.png' where set_id = $1`,
+      [set.id],
+    );
+    // set_stats is materialized: only the refresh job (service role) may refresh it.
+    await expect(as("anon", null, () => db.query(`select public.refresh_set_stats()`))).rejects.toThrow(
+      /permission denied/,
+    );
+    await db.query(`select public.refresh_set_stats()`);
     const stats = await as(
       "anon",
       null,
@@ -238,6 +248,24 @@ describe.skipIf(!ADMIN_URL)("database security (RLS)", () => {
       alt_art_cards: 3,
       top5_value: "204.00", // 100 + 60 + 30 + 12 + 2: one value per card, best printing
     });
+    // Cover image: no set logo, so the booster box image if it has one, else the top card.
+    const overview = await as(
+      "anon",
+      null,
+      async () =>
+        (
+          await db.query(
+            `select o.cover_image_url, o.total_cards, o.top5_value, b.image_url as box_image
+               from public.set_overview o
+               left join public.sealed_products b on b.set_id = o.id and b.product_type = 'booster_box'
+              where o.id = $1
+              order by b.current_price desc nulls last limit 1`,
+            [set.id],
+          )
+        ).rows[0],
+    );
+    expect(overview.total_cards).toBe(6);
+    expect(overview.cover_image_url).toBe(overview.box_image ?? "https://cdn.example.com/card-1.png");
 
     const { rows: prod } = await db.query(
       `select id from public.sealed_products where slug = 'pokemon-surging-sparks-booster-box'`,

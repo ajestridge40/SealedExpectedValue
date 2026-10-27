@@ -15,33 +15,46 @@ import {
 
 export const getGames = cache(async (): Promise<Game[]> => {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("games").select("id, slug, name").order("name");
+  const { data, error } = await supabase.from("games").select("id, slug, name").order("display_order").order("name");
   if (error) throw new Error(error.message);
   return data ?? [];
 });
 
-export const getSets = cache(async (): Promise<SetRow[]> => {
+const SET_COLUMNS = "id, game_id, name, code, release_date, tcgplayer_group_id, image_url, symbol_url";
+
+/** Sets of one game, newest first (for filter menus). */
+export const getSetsForGame = cache(async (gameId: string): Promise<SetRow[]> => {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("sets")
-    .select("id, game_id, name, code, release_date, tcgplayer_group_id")
-    .order("release_date", { ascending: false, nullsFirst: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  return fetchAll<SetRow>((from, to) =>
+    supabase
+      .from("sets")
+      .select(SET_COLUMNS)
+      .eq("game_id", gameId)
+      .order("release_date", { ascending: false, nullsFirst: false })
+      .order("id")
+      .range(from, to),
+  );
 });
+
+export const getSet = cache(async (id: string | null | undefined): Promise<SetRow | null> => {
+  if (!id) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("sets").select(SET_COLUMNS).eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+});
+
+export async function getSetsByIds(ids: string[]): Promise<SetRow[]> {
+  if (!ids.length) return [];
+  const supabase = await createClient();
+  return inBatches([...new Set(ids)], (batch) => supabase.from("sets").select(SET_COLUMNS).in("id", batch));
+}
 
 export const getDataSources = cache(async (): Promise<Map<string, DataSource>> => {
   const supabase = await createClient();
   const { data, error } = await supabase.from("data_sources").select("id, slug, name, kind, website_url, attribution");
   if (error) throw new Error(error.message);
   return new Map((data ?? []).map((d) => [d.id, d as DataSource]));
-});
-
-export const getAllProducts = cache(async (): Promise<ProductRow[]> => {
-  const supabase = await createClient();
-  return fetchAll<ProductRow>((from, to) =>
-    supabase.from("sealed_products").select(PRODUCT_COLUMNS).order("name").range(from, to),
-  );
 });
 
 export async function getProductBySlug(slug: string): Promise<ProductRow | null> {
@@ -89,7 +102,8 @@ export async function searchCards(s: CardSearch): Promise<{ rows: CardCatalogRow
   const supabase = await createClient();
   const pageSize = s.pageSize ?? 48;
   const page = Math.max(1, s.page ?? 1);
-  let query = supabase.from("cards").select(CARD_COLUMNS, { count: "exact" });
+  // "estimated": exact for small results, the planner's estimate for huge ones (exact counts of ~1M rows are slow).
+  let query = supabase.from("cards").select(CARD_COLUMNS, { count: "estimated" });
   if (s.q) query = query.ilike("name", `%${s.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
   if (s.gameId) query = query.eq("game_id", s.gameId);
   if (s.setId) query = query.eq("set_id", s.setId);

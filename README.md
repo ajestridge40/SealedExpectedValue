@@ -57,8 +57,9 @@ Provider responses are validated with Zod, normalized into internal types (`src/
 `getCurrentCardPrice`, optional `getPriceHistory`). Neither integrated provider offers price history, so history is
 built from SealedEV's own daily snapshots.
 
-**Card images** are hot-linked from `tcgplayer-cdn.tcgplayer.com` / `images.pokemontcg.io` (allow-listed in
-`src/lib/pricing/types.ts`), not downloaded or re-hosted. Missing images show a placeholder.
+**Card, product and set images** are hot-linked from the provider's CDN (mostly `tcgplayer-cdn.tcgplayer.com`), not
+downloaded or re-hosted. Only plain `https` URLs that come from the provider are stored (`safeImageUrl` in
+`src/lib/pricing/types.ts`); missing or broken images show a placeholder.
 
 ## Market analytics
 
@@ -66,8 +67,8 @@ Computed from stored prices, with no extra API calls:
 
 - **Top-5 cards / price**: the set's five most valuable cards ÷ the product's price. A quick set-strength indicator for
   products without a pull-rate model. It is **not** an EV and is always labelled as such.
-- **Set stats** (database view `set_stats`): cards worth ≥ $10 / ≥ $25 (chase) / ≥ $50, alt-art and chase-rarity
-  counts, top-5 value and top card.
+- **Set stats** (materialized view `set_stats`, refreshed after each price refresh): cards worth ≥ $10 / ≥ $25
+  (chase) / ≥ $50, alt-art and chase-rarity counts, top-5 value, top card, booster box price and cover image.
 - **Price movers** (database function `sealed_price_changes(days)`): change versus the latest price at least N days old.
 - **Product signals**: 30/90-day change, 30-day volatility (standard deviation ÷ mean), listing spread
   ((market − lowest listing) ÷ market, a rough liquidity signal) and set age.
@@ -135,10 +136,50 @@ manual prices):
 npm run user:make-admin you@example.com
 ```
 
-Day to day: `npm run dev` to run the app, `npm run prices:refresh:force` to pull the latest prices (prices change about
-once a day), `npm run catalog:import` after adding sets or products, and `npm run catalog:sync pokemon,lorcana 15` to
-add the latest 15 sets of those games (games: `pokemon`, `one-piece`, `lorcana`, `star-wars-unlimited`, `riftbound`,
-`mtg`, `yugioh`). Admins can do the same from `/admin` → “Add the latest sets”.
+Day to day: `npm run dev` to run the app, `npm run prices:refresh` to pull the latest prices (prices change about once a
+day), `npm run catalog:import` after adding sets or products, and `npm run catalog:sync pokemon,lorcana 15` to add the
+latest 15 sets of those games (games: `pokemon`, `one-piece`, `lorcana`, `star-wars-unlimited`, `riftbound`, `mtg`,
+`yugioh`, or `all`). Admins can do the same from `/admin` → “Sync sets”.
+
+### The full catalog: every product of every game
+
+SealedEV can store every set, sealed product and card printing (with images and prices) of every game TCGTracking
+covers, so all users read prices from your database and nothing calls the API while pages render:
+
+```powershell
+npm run catalog:sync:all          # every game, every set; same as: npm run catalog:sync all 0
+```
+
+- **Resumable.** Each set is saved as soon as it is loaded, and sets loaded in the last 7 days are skipped, so you can
+  stop it (Ctrl+C) and run the same command again to continue. Add `force` (`npm run catalog:sync all 0 force`) to
+  reload everything.
+- **Time and size.** The first full load makes three requests per set (several thousand sets) and takes a few hours.
+  Expect **roughly 1 million card printings and a few GB** of database space, more as price history grows. Supabase's
+  free plan stops at 500 MB, so the full catalog needs the **Pro plan** (8 GB included). On the free plan, sync only the
+  games you care about (for example `npm run catalog:sync pokemon,one-piece,lorcana 0`).
+- **Small history.** Sealed products get a price row every day (for charts); cards get a new history row only when
+  their price changes.
+- **Precomputed.** After each run, set stats (`set_stats`), 7/30-day price changes and EV results (`product_ev`) are
+  recomputed in the database, so list pages filter, sort and paginate in SQL.
+- **Keeping it fresh.** `npm run prices:refresh` refreshes every set whose prices are more than 12 hours old (oldest
+  first; also resumable). For a hosted site use the GitHub Actions below, since a full refresh runs longer than a Vercel
+  function may.
+
+**Set images.** Sets show their logo and symbol from TCGTracking when it provides them; otherwise the set's booster box
+image, then its most valuable card. Browse them at `/sets`.
+
+### Scheduled refresh with GitHub Actions (recommended for the full catalog)
+
+Two workflows in `.github/workflows` run on GitHub's servers (free for public repositories; private repositories
+include 2,000 minutes a month):
+
+- **Refresh prices** (`refresh-prices.yml`): daily at 07:17 UTC.
+- **Sync catalog** (`catalog-sync.yml`): Mondays, adds new sets and products of every game. Run it by hand the first
+  time (GitHub → **Actions** → **Sync catalog** → **Run workflow**) to load the full catalog without keeping your
+  computer on. Long first loads continue on the next run.
+
+Add two repository secrets (GitHub → **Settings** → **Secrets and variables** → **Actions** → **New repository
+secret**): `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (your Supabase secret key). Never commit them.
 
 If the import lists items under “needs attention” (no exact TCGplayer name match), set `sets.tcgplayer_group_id` or
 `sealed_products.tcgplayer_product_id` in the Supabase **Table Editor** (the id is the number in
@@ -205,6 +246,9 @@ Schema: `supabase/migrations/20261026000000_init.sql`. Main tables: `profiles`, 
 - Money is `numeric(12,2)` with an explicit ISO currency column; TypeScript uses decimal.js, never floats.
 - `price_snapshots` is unique per item, source and day, so re-running a refresh updates instead of duplicating. A trigger
   keeps `current_price`/`price_updated_at` on products and cards pointing at the newest snapshot.
+- Full-catalog support (`20261029000000_full_catalog.sql`): `product_overview` and `set_overview` views (one row per
+  product / set with everything the list pages need), `product_ev` (EV results stored by the refresh job), the
+  materialized `set_stats`, stored 7/30-day price changes, and trigram indexes for name search.
 - RLS: catalog, prices and pull models are readable by everyone and writable only by admins (or the service role).
   Profiles, collection lots and watchlists are readable and writable only by their owner. `job_runs` is service-role
   only (admins can read). Deleting an auth user cascades to all of their data.
@@ -246,13 +290,14 @@ npm start
    `NEXT_PUBLIC_SITE_URL` to the production URL and generate a long random `CRON_SECRET`.
 3. Apply the migrations and seed to your Supabase project (see Local setup, Option A), and add the production
    `/auth/callback` URL to Supabase's redirect allow list.
-4. Deploy. Then run `npm run catalog:import` and `npm run prices:refresh:force` once from your machine with the
-   production env vars (or sign in as an admin and use `/admin`).
+4. Deploy. Then load the catalog once: `npm run catalog:sync:all` from your machine with the production env vars, or
+   the **Sync catalog** GitHub Action (see “The full catalog” above).
 
 **Scheduled refresh.** `vercel.json` defines a daily cron at 21:15 UTC (prices change about once a day) that calls
 `/api/cron/refresh-prices`; Vercel sends `Authorization: Bearer $CRON_SECRET` automatically. On the Hobby plan cron jobs
-run at most once a day and may fire any time within the scheduled hour, which is all this app needs. The route allows up
-to 300 s; a refresh of a few sets takes seconds, but check your plan's function duration limit if you track many sets.
+run at most once a day and may fire any time within the scheduled hour. Each call refreshes the sets with the oldest
+prices for up to about 4 minutes, which covers a few hundred sets; **with the full catalog use the GitHub Actions
+workflow** instead (or as well).
 Overlapping runs are prevented by a database lock (`start_job`), and runs within `PRICE_REFRESH_MIN_INTERVAL_HOURS` of
 the last success are skipped unless `?force=1`.
 

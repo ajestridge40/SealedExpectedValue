@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WatchButton } from "@/components/watch-button";
 import { getProfile, getUser, staleAfterHours } from "@/lib/auth";
-import { getCardById, getDataSources, getGames, getPriceHistory, getSets } from "@/lib/data/catalog";
+import { getCardById, getDataSources, getGames, getPriceHistory, getSet } from "@/lib/data/catalog";
 import { isWatching } from "@/lib/data/user";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/utils";
@@ -27,10 +27,10 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
   if (!card) notFound();
   const path = `/cards/${card.id}`;
   const supabase = await createClient();
-  const [history, sources, sets, games, user, profile, watching, stale, latest, siblings] = await Promise.all([
+  const [history, sources, set, games, user, profile, watching, stale, latest, siblings] = await Promise.all([
     getPriceHistory({ cardId: card.id }),
     getDataSources(),
-    getSets(),
+    getSet(card.set_id),
     getGames(),
     getUser(),
     getProfile(),
@@ -58,7 +58,6 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
           }[],
         }),
   ]);
-  const set = sets.find((s) => s.id === card.set_id);
   const game = games.find((g) => g.id === card.game_id);
   const currency = card.current_price_currency ?? "USD";
   const source = card.current_price_source_id ? sources.get(card.current_price_source_id) : undefined;

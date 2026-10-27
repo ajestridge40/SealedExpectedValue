@@ -7,9 +7,9 @@ import { CompareScenario } from "@/components/compare-scenario";
 import { Money, Percent } from "@/components/money";
 import { EmptyState, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/form";
+import { Input } from "@/components/ui/form";
 import { staleAfterHours } from "@/lib/auth";
-import { getProductSummaries } from "@/lib/data/products";
+import { getProductSummaries, searchProductOptions } from "@/lib/data/products";
 import { PRODUCT_TYPE_LABELS } from "@/lib/data/types";
 import { formatRatio } from "@/lib/money";
 import { formatDate } from "@/lib/utils";
@@ -29,9 +29,13 @@ export default async function ComparePage({
     .filter(Boolean)
     .flatMap((v) => String(v).split(","));
   const ids = [...new Set(raw.filter((v) => /^[0-9a-f-]{36}$/i.test(v)))].slice(0, MAX);
-  const [all, stale] = await Promise.all([getProductSummaries(), staleAfterHours()]);
-  const selected = ids.map((id) => all.find((p) => p.id === id)).filter((p) => p !== undefined);
-  const others = all.filter((p) => !ids.includes(p.id));
+  const q = typeof sp.q === "string" ? sp.q : "";
+  const [selected, stale, matches] = await Promise.all([
+    getProductSummaries(ids),
+    staleAfterHours(),
+    q && ids.length < MAX ? searchProductOptions(q, 15) : Promise.resolve([]),
+  ]);
+  const addHref = (id: string) => `/compare?${[...ids, id].map((x) => `ids=${x}`).join("&")}`;
 
   const rows: { label: string; render: (p: (typeof selected)[number]) => React.ReactNode }[] = [
     { label: "Set", render: (p) => p.setName ?? "—" },
@@ -77,25 +81,23 @@ export default async function ComparePage({
   return (
     <>
       <PageHeader title="Compare sealed products" description={`Side by side, up to ${MAX} products.`} />
-      <form method="get" className="mb-6 flex flex-wrap items-end gap-2">
+      <form method="get" className="mb-3 flex flex-wrap items-end gap-2">
         {ids.map((id) => (
           <input key={id} type="hidden" name="ids" value={id} />
         ))}
-        <label className="text-muted flex flex-col gap-1.5 text-xs" htmlFor="add">
+        <label className="text-muted flex flex-col gap-1.5 text-xs" htmlFor="q">
           Add a product
-          <Select id="add" name="ids" className="w-72" defaultValue="" disabled={ids.length >= MAX}>
-            <option value="" disabled>
-              Choose…
-            </option>
-            {others.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+          <Input
+            id="q"
+            name="q"
+            defaultValue={q}
+            placeholder="Search products"
+            className="w-72"
+            disabled={ids.length >= MAX}
+          />
         </label>
         <Button type="submit" disabled={ids.length >= MAX}>
-          Add
+          Search
         </Button>
         {ids.length ? (
           <Button asChild variant="ghost">
@@ -103,6 +105,26 @@ export default async function ComparePage({
           </Button>
         ) : null}
       </form>
+      {matches.length ? (
+        <ul className="border-border divide-border mb-6 divide-y rounded-lg border text-sm">
+          {matches
+            .filter((m) => !ids.includes(m.id))
+            .map((m) => (
+              <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <span>
+                  {m.name} {m.setName ? <span className="text-muted text-xs">· {m.setName}</span> : null}
+                </span>
+                <Button asChild size="sm">
+                  <Link href={addHref(m.id)}>Add</Link>
+                </Button>
+              </li>
+            ))}
+        </ul>
+      ) : q ? (
+        <p className="text-muted mb-6 text-sm">No products found for “{q}”.</p>
+      ) : (
+        <div className="mb-6" />
+      )}
 
       {selected.length === 0 ? (
         <EmptyState

@@ -6,9 +6,10 @@ import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Field, Input, Select } from "@/components/ui/form";
+import { Field, Input } from "@/components/ui/form";
 import { getProfile, requireUser } from "@/lib/auth";
-import { getAllProducts, getCardById, searchCards } from "@/lib/data/catalog";
+import { getCardById, searchCards } from "@/lib/data/catalog";
+import { getProductSummaries, searchProductOptions } from "@/lib/data/products";
 import { param } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Add to collection" };
@@ -41,7 +42,7 @@ export default async function AddLotPage({
     let label: string | null = null;
     if (item) {
       if (type === "sealed") {
-        const p = (await getAllProducts()).find((x) => x.id === item);
+        const [p] = /^[0-9a-f-]{36}$/i.test(item) ? await getProductSummaries([item]) : [];
         if (!p) notFound();
         label = p.name;
       } else {
@@ -66,36 +67,40 @@ export default async function AddLotPage({
   }
 
   if (type === "sealed") {
-    const products = await getAllProducts();
+    const q = param(sp, "q");
+    const matches = q ? await searchProductOptions(q, 30) : [];
     return (
       <>
         <PageHeader title="Add to collection" />
         {tabs}
-        <Card className="max-w-2xl">
-          <CardContent className="pt-5 sm:pt-5">
-            <form method="get" className="flex flex-col gap-4">
+        <Card className="max-w-3xl">
+          <CardContent className="flex flex-col gap-4 pt-5 sm:pt-5">
+            <form method="get" className="flex items-end gap-2">
               <input type="hidden" name="type" value="sealed" />
-              <Field label="Product" htmlFor="item">
-                <Select id="item" name="item" required defaultValue="">
-                  <option value="" disabled>
-                    Choose a product…
-                  </option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Find a sealed product" htmlFor="q" className="flex-1">
+                <Input id="q" name="q" defaultValue={q} placeholder="Product or set name" />
               </Field>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" variant="primary">
-                  Continue
-                </Button>
-                <Link href="/collection/add?type=sealed&custom=1" className="text-accent text-sm hover:underline">
-                  Not listed? Add a custom item
-                </Link>
-              </div>
+              <Button type="submit">Search</Button>
             </form>
+            {q && matches.length === 0 ? <p className="text-muted text-sm">No products found for “{q}”.</p> : null}
+            {matches.length ? (
+              <ul className="divide-border border-border divide-y rounded-lg border">
+                {matches.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span>
+                      <span className="font-medium">{m.name}</span>
+                      {m.setName ? <span className="text-muted text-xs"> · {m.setName}</span> : null}
+                    </span>
+                    <Button asChild size="sm">
+                      <Link href={`/collection/add?type=sealed&item=${m.id}`}>Select</Link>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <Link href="/collection/add?type=sealed&custom=1" className="text-accent text-sm hover:underline">
+              Not listed? Add a custom item
+            </Link>
           </CardContent>
         </Card>
       </>

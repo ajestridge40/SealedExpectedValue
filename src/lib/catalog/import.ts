@@ -26,7 +26,7 @@ export async function runCatalogImport(
   const provider = opts.provider ?? new TcgTrackingProvider();
   const report: ImportReport = { setsLinked: [], productsLinked: [], cardsUpserted: 0, needsAttention: [], errors: [] };
 
-  const select = "id, name, game_id, tcgplayer_group_id, games!inner(tcgplayer_category_id)";
+  const select = "id, name, game_id, tcgplayer_group_id, image_url, games!inner(tcgplayer_category_id)";
   const sets = opts.setIds?.length
     ? await inBatches(opts.setIds, (batch) => db.from("sets").select(select).in("id", batch))
     : await fetchAll((from, to) => db.from("sets").select(select).order("id").range(from, to));
@@ -48,6 +48,16 @@ export async function runCatalogImport(
         const { error: uErr } = await db.from("sets").update({ tcgplayer_group_id: groupId }).eq("id", set.id);
         if (uErr) throw new Error(uErr.message);
         report.setsLinked.push(`${set.name} → ${m.match.name} (#${groupId})`);
+      }
+      if (!set.image_url) {
+        // Set logo and symbol (the set list is cached per game, so this is one request per game).
+        const g = (await provider.groups(categoryId)).find((x) => x.groupId === groupId);
+        const images = Object.fromEntries(
+          Object.entries({ image_url: safeImageUrl(g?.imageUrl), symbol_url: safeImageUrl(g?.symbolUrl) }).filter(
+            ([, v]) => v,
+          ),
+        );
+        if (Object.keys(images).length) await db.from("sets").update(images).eq("id", set.id);
       }
 
       const [products, prices] = await Promise.all([

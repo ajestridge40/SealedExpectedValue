@@ -36,6 +36,8 @@ export interface SetRow {
   code: string | null;
   release_date: string | null;
   tcgplayer_group_id: number | null;
+  image_url: string | null;
+  symbol_url: string | null;
 }
 
 export interface DataSource {

@@ -11,8 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getUser, staleAfterHours } from "@/lib/auth";
 import { getLastRefresh } from "@/lib/data/catalog";
 import { getCollection } from "@/lib/data/collection";
-import { getProductSummaries } from "@/lib/data/products";
-import { filterProducts } from "@/lib/data/summaries";
+import { getDashboardData } from "@/lib/data/products";
 import { groupPositions } from "@/lib/portfolio/valuation";
 import { formatRatio } from "@/lib/money";
 import { formatDateTime, isStale, param } from "@/lib/utils";
@@ -24,44 +23,23 @@ export default async function DashboardPage({
 }) {
   const sp = await searchParams;
   const user = await getUser();
-  const [products, stale, lastRefresh, collection] = await Promise.all([
-    getProductSummaries(),
+  const [market, stale, lastRefresh, collection] = await Promise.all([
+    getDashboardData(),
     staleAfterHours(),
     getLastRefresh(),
     user ? getCollection() : Promise.resolve(null),
   ]);
-
-  const shortlist = filterProducts(
-    products.filter((p) => (p.evStatus === "complete" || p.evStatus === "partial") && p.ratio !== null),
-    { sort: "ratio" },
-  ).slice(0, 4);
-  const recentlyPriced = products
-    .filter((p) => p.priceUpdatedAt)
-    .sort((a, b) => Date.parse(b.priceUpdatedAt!) - Date.parse(a.priceUpdatedAt!))
-    .slice(0, 6);
+  const { overview, useEv, shortlist, ranked, drops, strongestSets, recentlyPriced } = market;
   const hasCollection = collection && collection.entries.length > 0;
 
-  // Market overview (booster boxes and other priced sealed products).
-  const priced = products.filter((p) => p.price !== null && Number(p.price) > 0);
-  const withEv = priced.filter((p) => p.ratio !== null && (p.evStatus === "complete" || p.evStatus === "partial"));
-  const boxes = priced.filter((p) => p.productType === "booster_box");
-  // Like the EV ratio when a pull model exists; otherwise the top-5 card value ratio (clearly labelled).
-  const useEv = withEv.length >= 3;
-  const ratioOf = (p: (typeof products)[number]) => (useEv ? Number(p.ratio) : p.top5Ratio);
+  // EV / price when enough products have pull models; otherwise top-5 card value ÷ price for booster boxes.
+  const ratioOf = (p: (typeof ranked)[number]) => (useEv ? Number(p.ratio) : p.top5Ratio);
   const ratioLabel = useEv ? "EV / price" : "Top-5 cards / price";
-  const ranked = (useEv ? withEv : priced.filter((p) => p.top5Ratio !== null))
-    .slice()
-    .sort((a, b) => (ratioOf(b) ?? 0) - (ratioOf(a) ?? 0));
-  const avgRatio = ranked.length ? ranked.reduce((n, p) => n + (ratioOf(p) ?? 0), 0) / ranked.length : null;
-  const aboveOne = ranked.filter((p) => (ratioOf(p) ?? 0) >= 1).length;
-  const drops = priced
-    .filter((p) => p.change7d !== null && p.change7d < 0)
-    .sort((a, b) => (a.change7d ?? 0) - (b.change7d ?? 0))
-    .slice(0, 8);
-  const strongestSets = boxes
-    .filter((p) => p.top5Value !== null)
-    .sort((a, b) => (b.top5Ratio ?? 0) - (a.top5Ratio ?? 0))
-    .slice(0, 10);
+  const avgRatio = useEv ? overview.avg_ev_ratio : overview.avg_box_top5_ratio;
+  const aboveOne = useEv ? overview.ev_at_or_above_1 : overview.box_top5_at_or_above_1;
+  const withRatio = useEv ? overview.with_ev : overview.boxes_with_top5;
+  const priced = { length: overview.priced };
+  const boxes = { length: overview.boxes };
 
   return (
     <div className="flex flex-col gap-8">
@@ -116,7 +94,7 @@ export default async function DashboardPage({
             <p className="text-muted text-sm">
               {useEv
                 ? "EV / price uses each product's pull-rate model."
-                : "Few products have pull-rate models yet, so these charts use top-5 card value ÷ price: a quick set-strength indicator, not an EV."}{" "}
+                : "Few products have pull-rate models yet, so these charts compare booster boxes by top-5 card value ÷ price: a quick set-strength indicator, not an EV."}{" "}
               Above 1.0× means the value exceeds the price.
             </p>
           </div>
@@ -127,7 +105,11 @@ export default async function DashboardPage({
               sub={`${boxes.length} booster boxes`}
             />
             <Stat label={`Average ${ratioLabel}`} value={formatRatio(avgRatio)} />
-            <Stat label="At or above 1.0×" value={aboveOne.toLocaleString()} sub={`of ${ranked.length} with a ratio`} />
+            <Stat
+              label="At or above 1.0×"
+              value={aboveOne.toLocaleString()}
+              sub={`of ${withRatio.toLocaleString()} with a ratio`}
+            />
             <Stat
               label="Best value"
               value={<span className="text-base">{ranked[0]?.name ?? "—"}</span>}

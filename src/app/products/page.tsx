@@ -5,10 +5,10 @@ import { ProductCard } from "@/components/product-card";
 import { ProductFiltersForm } from "@/components/product-filters";
 import { Button } from "@/components/ui/button";
 import { getProfile, staleAfterHours } from "@/lib/auth";
-import { getGames, getSets } from "@/lib/data/catalog";
+import { getGames, getSetsForGame } from "@/lib/data/catalog";
 import { parseProductFilters } from "@/lib/data/parse-filters";
-import { getProductSummaries } from "@/lib/data/products";
-import { filterProducts } from "@/lib/data/summaries";
+import { Pagination } from "@/components/pagination";
+import { queryProducts } from "@/lib/data/products";
 
 export const metadata: Metadata = { title: "Sealed products" };
 
@@ -19,16 +19,13 @@ export default async function ProductsPage({
 }) {
   const sp = await searchParams;
   const f = parseProductFilters(sp);
-  const [all, games, sets, stale, profile] = await Promise.all([
-    getProductSummaries(),
-    getGames(),
-    getSets(),
-    staleAfterHours(),
-    getProfile(),
-  ]);
+  const [games, stale, profile] = await Promise.all([getGames(), staleAfterHours(), getProfile()]);
   // Preferred game applies until the visitor picks a game filter themselves.
   if (!("game" in sp) && profile?.preferred_game_id) f.game = profile.preferred_game_id;
-  const items = filterProducts(all, f);
+  const sets = f.game ? await getSetsForGame(f.game) : [];
+  const page = Math.min(10_000, Math.max(1, Number(Array.isArray(sp.page) ? sp.page[0] : sp.page) || 1));
+  const { rows: items, total } = await queryProducts(f, { page, pageSize: 48 });
+  const filtered = Boolean(f.q || f.set || f.type || f.minPrice || f.maxPrice || f.minRatio || f.net || f.confidence);
 
   return (
     <>
@@ -38,11 +35,11 @@ export default async function ProductsPage({
       />
       <ProductFiltersForm f={f} games={games} sets={sets} />
 
-      {all.length === 0 ? (
+      {total === 0 && !filtered && !f.game ? (
         <EmptyState icon={PackageSearch} title="The catalog is empty" className="mt-6">
           Run <code>npm run setup</code> (see README) to create the catalog and load prices.
         </EmptyState>
-      ) : items.length === 0 ? (
+      ) : total === 0 ? (
         <EmptyState icon={PackageSearch} title="No products match these filters" className="mt-6">
           Try widening the price range or lowering the minimum confidence.
         </EmptyState>
@@ -50,7 +47,7 @@ export default async function ProductsPage({
         <form action="/compare" method="get" className="mt-6">
           <div className="mb-3 flex items-center justify-between gap-3">
             <p className="text-muted text-sm">
-              {items.length} of {all.length} products
+              {total.toLocaleString()} product{total === 1 ? "" : "s"}
             </p>
             <Button type="submit" size="sm">
               <GitCompareArrows /> Compare selected
@@ -61,6 +58,7 @@ export default async function ProductsPage({
               <ProductCard key={p.id} p={p} staleAfterHours={stale} compareSelectable />
             ))}
           </div>
+          <Pagination page={page} pages={Math.ceil(total / 48)} params={sp} />
         </form>
       )}
     </>

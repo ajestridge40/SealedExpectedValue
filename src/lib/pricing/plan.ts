@@ -13,6 +13,10 @@ export interface TrackedProduct {
 
 export interface TrackedCard extends TrackedProduct {
   printing: string;
+  /** Current stored price; when given, unchanged prices are not written again. */
+  current_price?: number | string | null;
+  current_price_currency?: string | null;
+  current_price_kind?: string | null;
 }
 
 export interface SnapshotRow {
@@ -38,7 +42,7 @@ export function planSnapshots(args: {
   prices: ProviderPrice[];
   sourceId: string;
   capturedAt: Date;
-}): { rows: SnapshotRow[]; unpricedProducts: string[]; unpricedCards: string[] } {
+}): { rows: SnapshotRow[]; unchangedCards: string[]; unpricedProducts: string[]; unpricedCards: string[] } {
   const byProductId = new Map<number, ProviderPrice[]>();
   for (const p of args.prices) {
     const productId = Number(p.externalId.split(":").pop());
@@ -60,6 +64,10 @@ export function planSnapshots(args: {
   const rows: SnapshotRow[] = [];
   const unpricedProducts: string[] = [];
   const unpricedCards: string[] = [];
+  // Cards get a history row only when their market price changes; unchanged
+  // cards are just marked current (keeps the database small for ~1M cards).
+  // Sealed products always get a daily row: their history drives the charts.
+  const unchangedCards: string[] = [];
 
   for (const product of args.products) {
     if (product.tcgplayer_product_id === null) continue;
@@ -81,8 +89,19 @@ export function planSnapshots(args: {
       unpricedCards.push(card.id);
       if (!price) continue;
     }
+    const current = card.current_price === null || card.current_price === undefined ? null : Number(card.current_price);
+    if (
+      price.market !== null &&
+      current !== null &&
+      card.current_price_kind === "provider" &&
+      (card.current_price_currency ?? "USD") === price.currency &&
+      Math.round(current * 100) === Math.round(price.market * 100)
+    ) {
+      unchangedCards.push(card.id);
+      continue;
+    }
     rows.push({ sealed_product_id: null, card_id: card.id, ...base(price) });
   }
 
-  return { rows, unpricedProducts, unpricedCards };
+  return { rows, unchangedCards, unpricedProducts, unpricedCards };
 }

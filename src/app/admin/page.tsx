@@ -9,6 +9,9 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/utils";
 
+// Server actions on this page (set sync, price refresh) can run for a few minutes.
+export const maxDuration = 300;
+
 export const metadata: Metadata = { title: "Admin" };
 
 export default async function AdminPage() {
@@ -60,11 +63,12 @@ export default async function AdminPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Add the latest sets</CardTitle>
+          <CardTitle>Sync sets</CardTitle>
           <CardDescription>
-            Pulls the most recent sets of each game from TCGTracking with their sealed products, every card and images,
-            then refreshes prices. New products have no pull-rate model yet, so they show market data and set stats
-            rather than an EV.
+            Loads sets from TCGTracking with their logos, sealed products, every card, images and prices into the
+            database. Each run stops after about 4 minutes; run it again to continue. For the full catalog of every
+            game, run <code>npm run catalog:sync:all</code> on your computer or the “Sync catalog” GitHub Action. New
+            products have no pull-rate model yet, so they show market data and set stats rather than an EV.
           </CardDescription>
         </CardHeader>
         <CardContent>

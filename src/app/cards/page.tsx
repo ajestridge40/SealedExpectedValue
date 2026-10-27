@@ -8,7 +8,7 @@ import { EmptyState, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
 import { staleAfterHours } from "@/lib/auth";
-import { getGames, getRarities, getSets, searchCards } from "@/lib/data/catalog";
+import { getGames, getRarities, getSetsForGame, searchCards } from "@/lib/data/catalog";
 import { param } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Cards" };
@@ -34,7 +34,7 @@ export default async function CardsPage({
   const [{ rows, total }, games, sets, rarities, stale] = await Promise.all([
     searchCards(s),
     getGames(),
-    getSets(),
+    s.gameId ? getSetsForGame(s.gameId) : Promise.resolve([]),
     getRarities(s.setId),
     staleAfterHours(),
   ]);
@@ -71,8 +71,8 @@ export default async function CardsPage({
           </Select>
         </Field>
         <Field label="Set" htmlFor="set">
-          <Select id="set" name="set" defaultValue={s.setId ?? ""}>
-            <option value="">All sets</option>
+          <Select id="set" name="set" defaultValue={s.setId ?? ""} disabled={!sets.length && !s.setId}>
+            <option value="">{sets.length ? "All sets" : "Pick a game first"}</option>
             {sets.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.name}

@@ -26,8 +26,8 @@ export function ProductFiltersForm({ f, games, sets }: { f: ProductFilters; game
         </Select>
       </Field>
       <Field label="Set" htmlFor="set">
-        <Select id="set" name="set" defaultValue={f.set ?? ""}>
-          <option value="">All sets</option>
+        <Select id="set" name="set" defaultValue={f.set ?? ""} disabled={sets.length === 0}>
+          <option value="">{sets.length ? "All sets" : "Pick a game first"}</option>
           {sets.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}

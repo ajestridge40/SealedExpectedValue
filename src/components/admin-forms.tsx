@@ -77,6 +77,10 @@ export function SyncSetsForm({ games }: { games: { slug: string; name: string }[
     <form action={action} className="flex flex-col gap-3">
       <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
         <legend className="text-muted mb-2 text-xs font-medium">Games</legend>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" name="games" value="all" className="accent-[var(--color-accent)]" />
+          Every game on TCGTracking
+        </label>
         {games.map((g) => (
           <label key={g.slug} className="flex items-center gap-2 text-sm">
             <input
@@ -95,16 +99,20 @@ export function SyncSetsForm({ games }: { games: { slug: string; name: string }[
         <Input
           name="maxSets"
           type="number"
-          min={1}
-          max={100}
+          min={0}
+          max={10000}
           defaultValue={10}
-          className="w-20"
+          className="w-24"
           aria-label="Sets per game"
         />
-        sets per game
+        sets per game (0 = every set)
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="force" value="1" className="accent-[var(--color-accent)]" />
+        Reload sets loaded in the last 7 days
       </label>
       <Button type="submit" className="self-start" disabled={pending}>
-        {pending ? "Syncing… (can take a minute)" : "Sync latest sets"}
+        {pending ? "Syncing… (up to 4 minutes per run)" : "Sync sets"}
       </Button>
       {state.message ? <Notice tone="success">{state.message}</Notice> : null}
       {state.error ? <Notice tone="warn">{state.error}</Notice> : null}

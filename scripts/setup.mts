@@ -146,28 +146,40 @@ console.log(
 for (const n of [...imp.needsAttention, ...imp.errors]) console.log(`  ! ${n}`);
 
 console.log(
-  "\nAdd the latest sets automatically (sealed products, cards, images)?\n" +
-    "  Games: pokemon, one-piece, lorcana, star-wars-unlimited, riftbound, mtg, yugioh",
+  "\nAdd sets automatically (sealed products, every card, images and prices)?\n" +
+    "  Games: all, pokemon, mtg, yugioh, one-piece, lorcana, star-wars-unlimited, riftbound\n" +
+    "  'all' with 0 sets loads the full catalog of every game (takes hours and several GB;\n" +
+    "  it can be stopped and resumed with: npm run catalog:sync:all).",
 );
-const gamesAnswer = await ask(lines(), "Games, comma-separated [pokemon] (or 'none'): ", (v) =>
-  v === "" || /^(none|[a-z-]+(\s*,\s*[a-z-]+)*)$/i.test(v) ? null : "Use game names separated by commas, or 'none'.",
+const gamesAnswer = await ask(lines(), "Games, comma-separated, or 'all' [pokemon] (or 'none'): ", (v) =>
+  v === "" || /^(none|all|[a-z-]+(\s*,\s*[a-z-]+)*)$/i.test(v)
+    ? null
+    : "Use game names separated by commas, 'all' or 'none'.",
 );
 if (gamesAnswer.toLowerCase() !== "none") {
-  const maxAnswer = await ask(lines(), "How many recent sets per game? [10]: ", (v) =>
-    v === "" || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 200) ? null : "Enter a number from 1 to 200.",
+  const maxAnswer = await ask(lines(), "How many recent sets per game? 0 = every set [10]: ", (v) =>
+    v === "" || (/^\d+$/.test(v) && Number(v) <= 10_000) ? null : "Enter a number (0 = every set).",
   );
-  const games = (gamesAnswer || "pokemon").split(",").map((g) => g.trim().toLowerCase());
-  const sync = await runSetSync(admin, { games, maxSetsPerGame: Number(maxAnswer || 10), provider: tcgtracking });
+  const games =
+    gamesAnswer.toLowerCase() === "all"
+      ? ("all" as const)
+      : (gamesAnswer || "pokemon").split(",").map((g) => g.trim().toLowerCase());
+  const sync = await runSetSync(admin, {
+    games,
+    maxSetsPerGame: Number(maxAnswer || 10),
+    provider: tcgtracking,
+    log: (m) => console.log(`  ${m}`),
+  });
   console.log(
-    `  ${sync.setsCreated.length} set(s) added, ${sync.productsCreated} sealed product(s), ${sync.import?.cardsUpserted ?? 0} card printings`,
+    `  ${sync.setsProcessed} set(s) loaded, ${sync.productsCreated} sealed product(s), ${sync.import.cardsUpserted} card printings, ${sync.pricesWritten} prices`,
   );
-  for (const e of [...sync.errors, ...(sync.import?.errors ?? [])]) console.log(`  ! ${e}`);
+  for (const e of [...sync.errors, ...sync.import.errors].slice(0, 20)) console.log(`  ! ${e}`);
 }
 
-console.log("Refreshing prices…");
-const ref = await runPriceRefresh(admin, { force: true, tcgtracking });
+console.log("Refreshing prices for the remaining sets…");
+const ref = await runPriceRefresh(admin, { tcgtracking, minIntervalHours: 12 });
 console.log(`  ${ref.status}: ${ref.snapshotsWritten} prices from ${ref.setsProcessed} set(s)`);
-for (const e of ref.errors) console.log(`  ! ${e}`);
+for (const e of ref.errors.slice(0, 20)) console.log(`  ! ${e}`);
 
 console.log(`
 Done. Next:
@@ -175,6 +187,7 @@ Done. Next:
   Sign up in the app, then make yourself an admin:
   npm run user:make-admin you@example.com
   npm run catalog:sync pokemon,lorcana 15   add more recent sets any time
+  npm run catalog:sync:all                  load every set of every game (resumable)
 
 Tip: in Supabase → Authentication → URL Configuration, set Site URL to http://localhost:3000 and add
 http://localhost:3000/auth/callback to Redirect URLs (or turn off “Confirm email” under Sign In / Providers → Email

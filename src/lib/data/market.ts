@@ -24,12 +24,13 @@ export interface PriceChange {
   then_as_of: string;
 }
 
-/** Per-set card value profile (database view set_stats). */
-export const getSetStats = cache(async (): Promise<Map<string, SetStats>> => {
+/** Card value profile of one set (materialized view set_stats, refreshed with prices). */
+export const getSetStats = cache(async (setId: string | null | undefined): Promise<SetStats | null> => {
+  if (!setId) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase.from("set_stats").select("*").limit(5000);
+  const { data, error } = await supabase.from("set_stats").select("*").eq("set_id", setId).maybeSingle();
   if (error) throw new Error(error.message);
-  return new Map((data ?? []).map((r) => [r.set_id as string, { ...r, top5_value: Number(r.top5_value) } as SetStats]));
+  return data && data.total_cards > 0 ? ({ ...data, top5_value: Number(data.top5_value) } as SetStats) : null;
 });
 
 /** Sealed product price changes over `days` (database function sealed_price_changes). */

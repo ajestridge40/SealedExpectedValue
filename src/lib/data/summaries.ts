@@ -1,7 +1,5 @@
-import { topValueRatio } from "../analytics/market";
 import type { ConfidenceLevel } from "../ev";
-import type { ProductEv } from "./ev";
-import type { DataSource, Game, PriceKind, ProductType, SetRow } from "./types";
+import type { DataSource, PriceKind, ProductType } from "./types";
 
 /** Plain, serializable view of a product + its EV, for lists and client components. */
 export interface ProductSummary {
@@ -12,6 +10,7 @@ export interface ProductSummary {
   gameId: string;
   gameName: string | null;
   setId: string | null;
+  setImageUrl: string | null;
   productType: ProductType;
   releaseDate: string | null;
   imageUrl: string | null;
@@ -42,53 +41,82 @@ export interface ProductSummary {
   change7d: number | null;
 }
 
-export function toSummary(
-  pe: ProductEv,
-  ctx: {
-    sets: SetRow[];
-    games: Game[];
-    sources: Map<string, DataSource>;
-    setStats?: Map<string, { top5_value: number; chase_cards: number; cards_above_50: number }>;
-    changes?: Map<string, { pct_change: number | null }>;
-  },
-): ProductSummary {
-  const p = pe.product;
-  const set = ctx.sets.find((s) => s.id === p.set_id);
-  const stats = p.set_id ? ctx.setStats?.get(p.set_id) : undefined;
-  const top5Value = stats && stats.top5_value > 0 ? stats.top5_value : null;
+/** A row of the product_overview database view. */
+export interface OverviewRow {
+  id: string;
+  game_id: string;
+  set_id: string | null;
+  name: string;
+  slug: string;
+  product_type: ProductType;
+  release_date: string | null;
+  image_url: string | null;
+  pack_count: number | null;
+  current_price: number | string | null;
+  current_price_currency: string | null;
+  current_price_kind: PriceKind | null;
+  current_price_source_id: string | null;
+  price_updated_at: string | null;
+  is_sample: boolean;
+  price_change_7d: number | string | null;
+  set_name: string | null;
+  set_image_url: string | null;
+  set_symbol_url: string | null;
+  game_name: string | null;
+  top5_value: number | string | null;
+  chase_cards: number | null;
+  cards_above_50: number | null;
+  top5_ratio: number | string | null;
+  ev_status: ProductSummary["evStatus"];
+  gross_ev: number | string | null;
+  confidence: ConfidenceLevel;
+  pull_rate_confidence: ConfidenceLevel;
+  freshness: ProductSummary["freshness"];
+  probability_coverage: number;
+  price_coverage: number;
+  ev_ratio: number | string | null;
+  net_ev: number | string | null;
+  net_pct: number | string | null;
+}
+
+const str = (v: number | string | null) => (v === null || v === undefined ? null : String(v));
+const num = (v: number | string | null) => (v === null || v === undefined ? null : Number(v));
+
+export function overviewToSummary(r: OverviewRow, sources: Map<string, DataSource>): ProductSummary {
   return {
-    id: p.id,
-    slug: p.slug,
-    name: p.name,
-    setName: set?.name ?? null,
-    setId: p.set_id,
-    gameId: p.game_id,
-    gameName: ctx.games.find((g) => g.id === p.game_id)?.name ?? null,
-    productType: p.product_type,
-    releaseDate: p.release_date,
-    imageUrl: p.image_url,
-    packCount: p.pack_count,
-    price: p.current_price === null ? null : String(p.current_price),
-    currency: p.current_price_currency ?? "USD",
-    priceKind: p.current_price_kind,
-    priceSourceName: p.current_price_source_id ? (ctx.sources.get(p.current_price_source_id)?.name ?? null) : null,
-    priceUpdatedAt: p.price_updated_at,
-    ev: pe.ev?.grossEv?.toFixed(2) ?? null,
-    evStatus: pe.ev ? pe.ev.status : "no_model",
-    confidence: pe.ev?.confidence ?? "insufficient",
-    pullRateConfidence: pe.ev?.pullRateConfidence ?? "insufficient",
-    freshness: pe.ev?.freshness.label ?? "unknown",
-    probabilityCoverage: pe.ev?.probabilityCoverage ?? 0,
-    priceCoverage: pe.ev?.priceCoverage ?? 0,
-    ratio: pe.returns.evToPrice?.toFixed(4) ?? null,
-    net: pe.returns.netEv?.toFixed(2) ?? null,
-    netPct: pe.returns.netReturnPct?.toFixed(2) ?? null,
-    isSample: p.is_sample,
-    top5Value,
-    top5Ratio: topValueRatio(top5Value, p.current_price === null ? null : Number(p.current_price)),
-    chaseCards: stats?.chase_cards ?? null,
-    cardsAbove50: stats?.cards_above_50 ?? null,
-    change7d: ctx.changes?.get(p.id)?.pct_change ?? null,
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    setName: r.set_name,
+    setId: r.set_id,
+    setImageUrl: r.set_image_url ?? r.set_symbol_url,
+    gameId: r.game_id,
+    gameName: r.game_name,
+    productType: r.product_type,
+    releaseDate: r.release_date,
+    imageUrl: r.image_url,
+    packCount: r.pack_count,
+    price: str(r.current_price),
+    currency: r.current_price_currency ?? "USD",
+    priceKind: r.current_price_kind,
+    priceSourceName: r.current_price_source_id ? (sources.get(r.current_price_source_id)?.name ?? null) : null,
+    priceUpdatedAt: r.price_updated_at,
+    ev: r.gross_ev === null ? null : Number(r.gross_ev).toFixed(2),
+    evStatus: r.ev_status,
+    confidence: r.confidence,
+    pullRateConfidence: r.pull_rate_confidence,
+    freshness: r.freshness,
+    probabilityCoverage: Number(r.probability_coverage),
+    priceCoverage: Number(r.price_coverage),
+    ratio: str(r.ev_ratio),
+    net: r.net_ev === null ? null : Number(r.net_ev).toFixed(2),
+    netPct: str(r.net_pct),
+    isSample: r.is_sample,
+    top5Value: num(r.top5_value) || null,
+    top5Ratio: num(r.top5_ratio),
+    chaseCards: r.chase_cards,
+    cardsAbove50: r.cards_above_50,
+    change7d: num(r.price_change_7d),
   };
 }
 
@@ -103,51 +131,4 @@ export interface ProductFilters {
   net?: "positive" | "negative";
   confidence?: ConfidenceLevel;
   sort?: "ratio" | "ev" | "price" | "net" | "release" | "top5" | "change";
-}
-
-const CONF_RANK: Record<ConfidenceLevel, number> = { insufficient: 0, low: 1, medium: 2, high: 3 };
-
-/** Filter and sort in memory (the catalog is small; EV is computed per request anyway). */
-export function filterProducts(items: ProductSummary[], f: ProductFilters): ProductSummary[] {
-  const q = f.q?.toLowerCase();
-  const out = items.filter((p) => {
-    if (q && !`${p.name} ${p.setName ?? ""}`.toLowerCase().includes(q)) return false;
-    if (f.game && p.gameId !== f.game) return false;
-    if (f.set && p.setId !== f.set) return false;
-    if (f.type && p.productType !== f.type) return false;
-    const price = p.price === null ? null : Number(p.price);
-    if (f.minPrice !== undefined && (price === null || price < f.minPrice)) return false;
-    if (f.maxPrice !== undefined && (price === null || price > f.maxPrice)) return false;
-    if (f.minRatio !== undefined && (p.ratio === null || Number(p.ratio) < f.minRatio)) return false;
-    if (f.net === "positive" && (p.net === null || Number(p.net) <= 0)) return false;
-    if (f.net === "negative" && (p.net === null || Number(p.net) >= 0)) return false;
-    if (f.confidence && CONF_RANK[p.confidence] < CONF_RANK[f.confidence]) return false;
-    return true;
-  });
-  // Items without the sort value go last regardless of direction.
-  const num = (v: string | null) => (v === null ? null : Number(v));
-  const by = (get: (p: ProductSummary) => number | null, dir: 1 | -1) => (a: ProductSummary, b: ProductSummary) => {
-    const x = get(a);
-    const y = get(b);
-    if (x === null && y === null) return a.name.localeCompare(b.name);
-    if (x === null) return 1;
-    if (y === null) return -1;
-    return (x - y) * dir || a.name.localeCompare(b.name);
-  };
-  switch (f.sort ?? "ratio") {
-    case "ev":
-      return out.sort(by((p) => num(p.ev), -1));
-    case "price":
-      return out.sort(by((p) => num(p.price), 1));
-    case "net":
-      return out.sort(by((p) => num(p.netPct), -1));
-    case "top5":
-      return out.sort(by((p) => p.top5Ratio, -1));
-    case "change":
-      return out.sort(by((p) => p.change7d, 1));
-    case "release":
-      return out.sort(by((p) => (p.releaseDate ? Date.parse(p.releaseDate) : null), -1));
-    default:
-      return out.sort(by((p) => num(p.ratio), -1));
-  }
 }

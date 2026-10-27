@@ -1,31 +1,42 @@
 /**
- * Add the latest sets (sealed products, cards, images) for one or more games
- * from TCGTracking, then refresh prices. Free, no API key.
+ * Add sets (sealed products, every card printing, images and prices) from
+ * TCGTracking to the database. Free, no API key. Resumable: sets loaded in the
+ * last 7 days are skipped, so re-running after a stop continues where it left off.
  *   npm run catalog:sync                       # Pokémon, latest 10 sets
  *   npm run catalog:sync pokemon,lorcana 15    # games (comma-separated), sets per game
- * Games: pokemon, one-piece, lorcana, star-wars-unlimited, riftbound, mtg, yugioh
+ *   npm run catalog:sync all 0                 # every game, every set (the full catalog)
+ *   npm run catalog:sync all 0 force           # reload sets even if loaded recently
+ * Games: all, pokemon, mtg, yugioh, one-piece, lorcana, star-wars-unlimited, riftbound, …
  */
 import { runSetSync } from "../src/lib/catalog/sync.ts";
 import { TcgTrackingProvider } from "../src/lib/pricing/providers/tcgtracking.ts";
-import { runPriceRefresh } from "../src/lib/pricing/refresh.ts";
 import { adminClient } from "./lib.mts";
 
-const args = process.argv.slice(2).filter((a) => a !== "--");
-const games = (args.find((a) => /[a-z]/i.test(a)) ?? "pokemon").split(",").map((g) => g.trim().toLowerCase());
+const args = process.argv.slice(2).filter((a) => a !== "--" && a !== "--force");
+const force = process.argv.includes("force") || process.argv.includes("--force");
+const gameArg = (args.find((a) => /[a-z]/i.test(a) && a !== "force") ?? "pokemon").toLowerCase();
+const games = gameArg === "all" ? ("all" as const) : gameArg.split(",").map((g) => g.trim());
 const maxSets = Number(args.find((a) => /^\d+$/.test(a)) ?? 10);
 
-const db = adminClient();
-const provider = new TcgTrackingProvider();
-console.log(`Syncing the latest ${maxSets} set(s) for: ${games.join(", ")} …`);
-const sync = await runSetSync(db, { games, maxSetsPerGame: maxSets, provider });
 console.log(
-  `  ${sync.setsCreated.length} set(s) added, ${sync.setsLinked.length} linked, ${sync.productsCreated} sealed product(s) added, ` +
-    `${sync.import?.cardsUpserted ?? 0} card printings`,
+  `Syncing ${maxSets > 0 ? `the latest ${maxSets} set(s)` : "every set"} for ${games === "all" ? "every game" : games.join(", ")}` +
+    `${force ? " (force)" : ""} …`,
 );
-for (const e of [...sync.errors, ...(sync.import?.needsAttention ?? []), ...(sync.import?.errors ?? [])])
-  console.log(`  ! ${e}`);
-console.log("Refreshing prices…");
-const ref = await runPriceRefresh(db, { force: true, tcgtracking: provider });
-console.log(`  ${ref.status}: ${ref.snapshotsWritten} prices from ${ref.setsProcessed} set(s)`);
-for (const e of ref.errors.slice(0, 10)) console.log(`  ! ${e}`);
-process.exit(ref.status === "failed" ? 1 : 0);
+const started = Date.now();
+const sync = await runSetSync(adminClient(), {
+  games,
+  maxSetsPerGame: maxSets,
+  provider: new TcgTrackingProvider(),
+  force,
+  log: (m) => console.log(`  ${m}`),
+});
+const minutes = ((Date.now() - started) / 60_000).toFixed(1);
+console.log(
+  `\nDone in ${minutes} min: ${sync.setsProcessed} set(s) loaded, ${sync.setsSkipped} skipped (loaded in the last 7 days), ` +
+    `${sync.setsCreated.length} new, ${sync.productsCreated} sealed product(s) added, ` +
+    `${sync.import.cardsUpserted} card printings, ${sync.pricesWritten} new prices, ${sync.evResultsStored} EV results.`,
+);
+const problems = [...sync.errors, ...sync.import.errors];
+for (const e of problems.slice(0, 30)) console.log(`  ! ${e}`);
+if (problems.length > 30) console.log(`  … and ${problems.length - 30} more`);
+process.exit(sync.setsProcessed === 0 && problems.length ? 1 : 0);

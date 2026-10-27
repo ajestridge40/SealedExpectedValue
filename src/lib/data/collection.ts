@@ -2,7 +2,7 @@ import "server-only";
 import { getProfile, requireUser, staleAfterHours } from "../auth";
 import { summarize, valueLot, type LotInput, type LotValuation, type PortfolioTotals } from "../portfolio/valuation";
 import { createClient } from "../supabase/server";
-import { getSets } from "./catalog";
+import { getSetsByIds } from "./catalog";
 import type { PriceKind } from "./types";
 
 interface PricedItem {
@@ -100,7 +100,7 @@ export async function getCollection(): Promise<{
 }> {
   await requireUser("/collection");
   const supabase = await createClient();
-  const [sealed, cards, sets, stale, profile] = await Promise.all([
+  const [sealed, cards, stale, profile] = await Promise.all([
     supabase
       .from("collection_sealed_positions")
       .select(SEALED_SELECT)
@@ -111,12 +111,17 @@ export async function getCollection(): Promise<{
       .select(CARD_SELECT)
       .order("created_at", { ascending: false })
       .limit(5000),
-    getSets(),
     staleAfterHours(),
     getProfile(),
   ]);
   if (sealed.error) throw new Error(sealed.error.message);
   if (cards.error) throw new Error(cards.error.message);
+  const sets = await getSetsByIds(
+    [
+      ...(sealed.data as SealedLotRow[]).map((r) => r.sealed_products?.set_id),
+      ...(cards.data as CardLotRow[]).map((r) => r.cards?.set_id),
+    ].filter((id): id is string => Boolean(id)),
+  );
   const setName = (id: string | null | undefined) => sets.find((s) => s.id === id)?.name ?? null;
   const now = new Date();
 

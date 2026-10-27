@@ -1,71 +1,171 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchAll } from "../data/fetch-all";
+import { fetchAll, inBatches } from "../data/fetch-all";
+import { computeAndStoreEvs } from "../ev/compute";
 import { planSnapshots, type SnapshotRow, type TrackedCard, type TrackedProduct } from "./plan";
 import { PokemonTcgProvider } from "./providers/pokemontcg";
 import { TcgTrackingProvider } from "./providers/tcgtracking";
 
 /*
- * Scheduled price refresh. Takes a service-role client (no "server-only"
- * import, so the CLI script can use it too).
+ * Price refresh: one shared copy of every price in the database, read by all
+ * users, so pages never call the provider. Takes a service-role client (no
+ * "server-only" import, so CLI scripts and GitHub Actions can use it too).
  *
- * - Holds a job lock (job_runs) so overlapping cron/manual runs do not race.
- * - Skips if a successful run finished recently, unless forced: prices change
- *   about daily, so refreshing more often only adds load on the free API.
- * - Two requests per set to TCGTracking (products + pricing). Provider failures are recorded and the
- *   last known prices are left untouched.
+ * - Holds a job lock (job_runs) so overlapping runs do not race.
+ * - Resumable: refreshes sets whose prices are older than minIntervalHours,
+ *   oldest first, until the time budget runs out; the next run continues.
+ * - Two requests per set (products + pricing). Sealed products get a daily
+ *   history row; cards only when their price changes.
+ * - Afterwards: 7/30-day price changes, set stats and stored EV results are
+ *   recomputed in the database.
+ * - Provider failures are recorded and the last known prices are kept.
  */
 
 export interface RefreshReport {
   status: "succeeded" | "failed" | "skipped";
   reason?: string;
   setsProcessed: number;
+  /** Sets still due when the time budget ran out (the next run continues). */
+  setsRemaining: number;
   snapshotsWritten: number;
+  cardsUnchanged: number;
   unpricedProducts: number;
   unpricedCards: number;
+  evResultsStored: number;
   errors: string[];
   startedAt: string;
   finishedAt: string;
 }
 
+export interface DueSet {
+  id: string;
+  name: string;
+  tcgplayer_group_id: number;
+  categoryId: number;
+}
+
 const JOB = "refresh-prices";
+
+/** Fetch and store the prices of one set. */
+export async function refreshSetPrices(
+  db: SupabaseClient,
+  provider: TcgTrackingProvider,
+  set: DueSet,
+  sourceId: string,
+  capturedAt: Date,
+): Promise<{ snapshots: number; unchanged: number; unpricedProducts: number; unpricedCards: number }> {
+  const prices = await provider.setPrices(set.categoryId, set.tcgplayer_group_id);
+  const products = await fetchAll<TrackedProduct>((f, t) =>
+    db
+      .from("sealed_products")
+      .select("id, tcgplayer_product_id")
+      .eq("set_id", set.id)
+      .not("tcgplayer_product_id", "is", null)
+      .order("id")
+      .range(f, t),
+  );
+  const cards = await fetchAll<TrackedCard>((f, t) =>
+    db
+      .from("cards")
+      .select("id, tcgplayer_product_id, printing, current_price, current_price_currency, current_price_kind")
+      .eq("set_id", set.id)
+      .not("tcgplayer_product_id", "is", null)
+      .order("id")
+      .range(f, t),
+  );
+  const plan = planSnapshots({ products, cards, prices, sourceId, capturedAt });
+  const snapshots = await writeSnapshots(db, plan.rows);
+  await inBatches(
+    plan.unchangedCards,
+    async (batch) => {
+      const { error } = await db.rpc("touch_card_prices", { card_ids: batch, as_of: capturedAt.toISOString() });
+      return { data: [], error };
+    },
+    500,
+  );
+  await db.from("sets").update({ prices_synced_at: capturedAt.toISOString() }).eq("id", set.id);
+  provider.forgetSet(set.categoryId, set.tcgplayer_group_id);
+  return {
+    snapshots,
+    unchanged: plan.unchangedCards.length,
+    unpricedProducts: plan.unpricedProducts.length,
+    unpricedCards: plan.unpricedCards.length,
+  };
+}
+
+/** Recompute derived data after prices changed: price changes, set stats, stored EVs. */
+export async function finalizePrices(
+  db: SupabaseClient,
+  now = new Date(),
+): Promise<{ evResults: number; errors: string[] }> {
+  const errors: string[] = [];
+  for (const fn of ["update_price_changes", "refresh_set_stats"]) {
+    const { error } = await db.rpc(fn);
+    if (error) errors.push(`${fn}: ${error.message}`);
+  }
+  let evResults = 0;
+  try {
+    evResults = await computeAndStoreEvs(db, now);
+  } catch (err) {
+    errors.push(`EV results: ${(err as Error).message}`);
+  }
+  return { evResults, errors };
+}
+
+/** Sets with a TCGplayer group id whose prices are due, oldest first. */
+export async function dueSets(db: SupabaseClient, olderThan: Date | null): Promise<DueSet[]> {
+  const rows = await fetchAll<{
+    id: string;
+    name: string;
+    tcgplayer_group_id: number;
+    prices_synced_at: string | null;
+    games: unknown;
+  }>((f, t) => {
+    let q = db
+      .from("sets")
+      .select("id, name, tcgplayer_group_id, prices_synced_at, games!inner(tcgplayer_category_id)")
+      .not("tcgplayer_group_id", "is", null);
+    if (olderThan) q = q.or(`prices_synced_at.is.null,prices_synced_at.lt.${olderThan.toISOString()}`);
+    return q.order("prices_synced_at", { ascending: true, nullsFirst: true }).order("id").range(f, t);
+  });
+  // The embedded game comes back as an object (or a one-element array, depending on the client version).
+  const category = (g: unknown) =>
+    ((Array.isArray(g) ? g[0] : g) as { tcgplayer_category_id: number | null } | undefined)?.tcgplayer_category_id ??
+    null;
+  return rows
+    .filter((r) => category(r.games))
+    .map((r) => ({ id: r.id, name: r.name, tcgplayer_group_id: r.tcgplayer_group_id, categoryId: category(r.games)! }));
+}
 
 export async function runPriceRefresh(
   db: SupabaseClient,
   opts: {
+    /** Refresh every set, however recently it was refreshed. */
     force?: boolean;
     minIntervalHours?: number;
+    /** Stop starting new sets after this long (the next run continues). Default: no limit. */
+    timeBudgetMs?: number;
     tcgtracking?: TcgTrackingProvider | null;
     pokemontcg?: PokemonTcgProvider | null;
     now?: () => Date;
+    log?: (message: string) => void;
   } = {},
 ): Promise<RefreshReport> {
   const now = opts.now ?? (() => new Date());
   const startedAt = now();
+  const clockStart = Date.now();
   const report: RefreshReport = {
     status: "succeeded",
     setsProcessed: 0,
+    setsRemaining: 0,
     snapshotsWritten: 0,
+    cardsUnchanged: 0,
     unpricedProducts: 0,
     unpricedCards: 0,
+    evResultsStored: 0,
     errors: [],
     startedAt: startedAt.toISOString(),
     finishedAt: startedAt.toISOString(),
   };
-
-  if (!opts.force) {
-    const { data: last } = await db
-      .from("job_runs")
-      .select("finished_at")
-      .eq("job", JOB)
-      .eq("status", "succeeded")
-      .order("finished_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const minMs = (opts.minIntervalHours ?? 12) * 3_600_000;
-    if (last?.finished_at && startedAt.getTime() - new Date(last.finished_at).getTime() < minMs) {
-      return { ...report, status: "skipped", reason: `Last successful refresh finished at ${last.finished_at}.` };
-    }
-  }
 
   const { data: runId, error: lockErr } = await db.rpc("start_job", { job_name: JOB });
   if (lockErr) throw new Error(`Could not start job: ${lockErr.message}`);
@@ -81,47 +181,28 @@ export async function runPriceRefresh(
       report.errors.push("The 'tcgtracking' data source is missing. Run `npm run db:setup`.");
     }
     if (tcgtracking && sourceId("tcgtracking")) {
-      const { data: sets, error: setErr } = await db
-        .from("sets")
-        .select("id, name, tcgplayer_group_id, games!inner(tcgplayer_category_id)")
-        .not("tcgplayer_group_id", "is", null);
-      if (setErr) throw new Error(setErr.message);
-
-      for (const set of sets ?? []) {
-        const game = set.games as unknown as { tcgplayer_category_id: number | null };
-        if (!game?.tcgplayer_category_id) continue;
+      const minMs = (opts.minIntervalHours ?? 12) * 3_600_000;
+      const due = await dueSets(db, opts.force ? null : new Date(startedAt.getTime() - minMs));
+      if (due.length === 0) {
+        report.status = "skipped";
+        report.reason = `Every set was refreshed in the last ${opts.minIntervalHours ?? 12} hours.`;
+      }
+      for (const [i, set] of due.entries()) {
+        if (opts.timeBudgetMs && Date.now() - clockStart > opts.timeBudgetMs) {
+          report.setsRemaining = due.length - i;
+          break;
+        }
         try {
-          const prices = await tcgtracking.setPrices(game.tcgplayer_category_id, set.tcgplayer_group_id as number);
-          const products = await fetchAll<TrackedProduct>((f, t) =>
-            db
-              .from("sealed_products")
-              .select("id, tcgplayer_product_id")
-              .eq("set_id", set.id)
-              .not("tcgplayer_product_id", "is", null)
-              .range(f, t),
-          );
-          const cards = await fetchAll<TrackedCard>((f, t) =>
-            db
-              .from("cards")
-              .select("id, tcgplayer_product_id, printing")
-              .eq("set_id", set.id)
-              .not("tcgplayer_product_id", "is", null)
-              .order("id")
-              .range(f, t),
-          );
-          const plan = planSnapshots({
-            products,
-            cards,
-            prices,
-            sourceId: sourceId("tcgtracking")!,
-            capturedAt: startedAt,
-          });
-          report.snapshotsWritten += await writeSnapshots(db, plan.rows);
-          report.unpricedProducts += plan.unpricedProducts.length;
-          report.unpricedCards += plan.unpricedCards.length;
+          const r = await refreshSetPrices(db, tcgtracking, set, sourceId("tcgtracking")!, startedAt);
+          report.snapshotsWritten += r.snapshots;
+          report.cardsUnchanged += r.unchanged;
+          report.unpricedProducts += r.unpricedProducts;
+          report.unpricedCards += r.unpricedCards;
           report.setsProcessed++;
+          opts.log?.(`[${i + 1}/${due.length}] ${set.name}: ${r.snapshots} new prices, ${r.unchanged} unchanged`);
         } catch (err) {
           report.errors.push(`${set.name}: ${(err as Error).message}`);
+          opts.log?.(`[${i + 1}/${due.length}] ${set.name}: ${(err as Error).message}`);
         }
       }
     }
@@ -162,6 +243,12 @@ export async function runPriceRefresh(
       report.snapshotsWritten += await writeSnapshots(db, rows);
     }
 
+    if (report.setsProcessed > 0) {
+      opts.log?.("Updating price changes, set stats and EV results…");
+      const fin = await finalizePrices(db, startedAt);
+      report.evResultsStored = fin.evResults;
+      report.errors.push(...fin.errors);
+    }
     if (report.setsProcessed === 0 && report.errors.length > 0) report.status = "failed";
   } catch (err) {
     report.status = "failed";
@@ -176,7 +263,7 @@ export async function runPriceRefresh(
   return report;
 }
 
-async function writeSnapshots(db: SupabaseClient, rows: SnapshotRow[]): Promise<number> {
+export async function writeSnapshots(db: SupabaseClient, rows: SnapshotRow[]): Promise<number> {
   let written = 0;
   const productRows = rows.filter((r) => r.sealed_product_id);
   const cardRows = rows.filter((r) => r.card_id);

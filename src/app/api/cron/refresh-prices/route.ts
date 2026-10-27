@@ -17,7 +17,9 @@ function authorized(request: NextRequest): boolean {
 }
 
 /**
- * Scheduled price refresh. Vercel Cron calls it with "Authorization: Bearer
+ * Scheduled price refresh. Resumable: each call refreshes the sets whose prices
+ * are oldest and stops after ~4 minutes, so a large catalog needs several calls
+ * (or the GitHub Actions workflow, which has no time limit). Vercel Cron calls it with "Authorization: Bearer
  * $CRON_SECRET"; other schedulers (AWS EventBridge, GitHub Actions, cron-job.org)
  * can do the same. ?force=1 ignores the minimum interval.
  */
@@ -29,6 +31,8 @@ export async function GET(request: NextRequest) {
       minIntervalHours: config.refreshMinIntervalHours(),
       tcgtracking: config.enableTcgtracking() ? undefined : null,
       pokemontcg: config.enablePokemonTcg() ? new PokemonTcgProvider() : null,
+      // Stay under maxDuration; the next call continues with the sets still due.
+      timeBudgetMs: 240_000,
     });
     return NextResponse.json(report, { status: report.status === "failed" ? 502 : 200 });
   } catch (err) {

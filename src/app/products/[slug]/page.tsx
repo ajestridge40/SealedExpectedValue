@@ -16,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, Td, Th } from "@/components/ui/table";
 import { WatchButton } from "@/components/watch-button";
 import { getProfile, getUser, staleAfterHours } from "@/lib/auth";
-import { getDataSources, getGames, getPriceHistory, getProductBySlug, getSets } from "@/lib/data/catalog";
+import { getDataSources, getGames, getPriceHistory, getProductBySlug, getSet } from "@/lib/data/catalog";
 import { getProductEvs } from "@/lib/data/ev";
 import { PRODUCT_TYPE_LABELS } from "@/lib/data/types";
 import { isWatching } from "@/lib/data/user";
@@ -54,21 +54,20 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!product) notFound();
 
   const path = `/products/${product.slug}`;
-  const [evs, history, sources, sets, games, user, profile, watching, stale, setStats] = await Promise.all([
+  const [evs, history, sources, set, games, user, profile, watching, stale, setStats] = await Promise.all([
     getProductEvs([product.id]),
     getPriceHistory({ productId: product.id }),
     getDataSources(),
-    getSets(),
+    getSet(product.set_id),
     getGames(),
     getUser(),
     getProfile(),
     isWatching("sealed", product.id),
     staleAfterHours(),
-    getSetStats(),
+    getSetStats(product.set_id),
   ]);
   const pe = evs.get(product.id)!;
   const ev = pe.ev;
-  const set = sets.find((s) => s.id === product.set_id);
   const game = games.find((g) => g.id === product.game_id);
   const currency = product.current_price_currency ?? "USD";
   const source = product.current_price_source_id ? sources.get(product.current_price_source_id) : undefined;
@@ -79,7 +78,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     .filter((h) => h.currency === currency && h.market_price !== null)
     .map((h) => ({ t: h.provider_as_of ?? h.captured_at, price: Number(h.market_price) }));
   const latestSnap = history.filter((h) => h.currency === currency).at(-1);
-  const stats = product.set_id ? setStats.get(product.set_id) : undefined;
+  const stats = setStats ?? undefined;
   const marketPrice = product.current_price === null ? null : Number(product.current_price);
   const signals = [
     {
@@ -151,7 +150,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               ) : null}
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">{product.name}</h1>
-            {set ? <p className="text-muted text-sm">Set: {set.name}</p> : null}
+            {set ? (
+              <p className="text-muted text-sm">
+                Set:{" "}
+                <Link href={`/sets/${set.id}`} className="hover:text-accent underline-offset-2 hover:underline">
+                  {set.name}
+                </Link>
+              </p>
+            ) : null}
             {product.description ? <p className="text-muted mt-3 max-w-2xl text-sm">{product.description}</p> : null}
             {product.pack_configuration ? (
               <p className="text-muted mt-1 text-sm">

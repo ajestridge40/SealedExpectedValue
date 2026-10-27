@@ -1,0 +1,44 @@
+# Weekly catalog sync: adds new sets and products of every game (with images,
+# cards and prices). Sets loaded in the last 7 days are skipped, so a run that
+# times out continues where it stopped next time. Start it by hand
+# (Actions → Sync catalog → Run workflow) for the first full load.
+# Needs repository secrets NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
+name: Sync catalog
+on:
+  schedule:
+    - cron: "43 5 * * 1" # Mondays, 05:43 UTC
+  workflow_dispatch:
+    inputs:
+      games:
+        description: "Game slugs, comma-separated, or 'all'"
+        default: all
+      max_sets:
+        description: "Newest sets per game (0 = every set)"
+        default: "0"
+      force:
+        description: "Reload sets loaded in the last 7 days"
+        type: boolean
+        default: false
+
+concurrency:
+  group: catalog-data
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run catalog:sync "$GAMES" "$MAX_SETS" $FORCE
+        env:
+          GAMES: ${{ inputs.games || 'all' }}
+          MAX_SETS: ${{ inputs.max_sets || '0' }}
+          FORCE: ${{ inputs.force && 'force' || '' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

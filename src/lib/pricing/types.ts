@@ -69,18 +69,19 @@ export interface PricingProvider {
   getPriceHistory?(externalId: string, from: Date, to: Date): Promise<ProviderPrice[]>;
 }
 
-/** Image hosts we will display. Anything else falls back to a placeholder. */
-export const ALLOWED_IMAGE_HOSTS = [
-  "tcgplayer-cdn.tcgplayer.com",
-  "product-images.tcgplayer.com",
-  "images.pokemontcg.io",
-];
-
+/**
+ * Image URLs we will display: plain https links only. Images come from the
+ * pricing provider (never from users) and are loaded by the browser straight
+ * from their CDN; the server never fetches them, so any https host is fine.
+ * Rejects other schemes (javascript:, data:, http:), embedded credentials and
+ * oversized URLs.
+ */
 export function safeImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
+  if (!url || url.length > 1000) return null;
   try {
-    const u = new URL(url);
-    return u.protocol === "https:" && ALLOWED_IMAGE_HOSTS.includes(u.hostname) ? u.toString() : null;
+    const u = new URL(url.startsWith("//") ? `https:${url}` : url);
+    if (u.protocol !== "https:" || u.username || u.password) return null;
+    return u.toString();
   } catch {
     return null;
   }

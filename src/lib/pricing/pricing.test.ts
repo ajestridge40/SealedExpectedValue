@@ -41,7 +41,7 @@ const TT_PRODUCTS = {
       name: "Testachu ex - 238/191",
       number: "238/191",
       rarity: "Special Illustration Rare",
-      image_url: "https://evil.example.com/x.jpg",
+      image_url: "http://insecure.example.com/x.jpg",
       tcgplayer_url: "https://www.tcgplayer.com/product/3",
     },
   ],
@@ -266,13 +266,18 @@ describe("catalog matching", () => {
     expect(miss.candidates.length).toBeGreaterThan(0);
   });
 
-  it("creates one card row per priced printing and drops unsafe image hosts", () => {
+  it("creates one card row per priced printing and drops unsafe image URLs", () => {
     const rows = cardRowsFromGroup(PRODUCTS, PRICES);
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.printing)).toEqual(["Holofoil", "Reverse Holofoil"]);
     expect(rows[0].image_url).toBeNull();
     expect(safeImageUrl("https://tcgplayer-cdn.tcgplayer.com/product/1_200w.jpg")).not.toBeNull();
     expect(safeImageUrl("javascript:alert(1)")).toBeNull();
+    expect(safeImageUrl("data:image/png;base64,AAAA")).toBeNull();
+    expect(safeImageUrl("https://user:pw@cdn.example.com/a.png")).toBeNull();
+    expect(safeImageUrl("//tcgplayer-cdn.tcgplayer.com/set_icon/x.png")).toBe(
+      "https://tcgplayer-cdn.tcgplayer.com/set_icon/x.png",
+    );
   });
 });
 
@@ -332,6 +337,41 @@ describe("planSnapshots", () => {
     ]);
     expect(plan.rows[0].snapshot_date).toBe("2026-10-26");
     expect(plan.unpricedCards).toEqual(["c2", "c3"]);
+  });
+
+  it("writes card history only when a provider price changes", () => {
+    const price = (id: number, market: number) => ({
+      externalId: `3:9001:${id}`,
+      printing: "Holofoil",
+      currency: "USD",
+      market,
+      low: null,
+      mid: null,
+      high: null,
+      asOf: null,
+    });
+    const card = (id: string, product: number, current: string | null, kind: string | null = "provider") => ({
+      id,
+      tcgplayer_product_id: product,
+      printing: "Holofoil",
+      current_price: current,
+      current_price_currency: "USD",
+      current_price_kind: kind,
+    });
+    const plan = planSnapshots({
+      products: [],
+      cards: [
+        card("same", 1, "9.99"),
+        card("moved", 2, "5.00"),
+        card("manual", 3, "7.00", "manual"),
+        card("new", 4, null),
+      ],
+      prices: [price(1, 9.99), price(2, 5.5), price(3, 7), price(4, 1)],
+      sourceId: "src",
+      capturedAt: new Date("2026-10-26T21:00:00Z"),
+    });
+    expect(plan.unchangedCards).toEqual(["same"]);
+    expect(plan.rows.map((r) => r.card_id)).toEqual(["moved", "manual", "new"]);
   });
 });
 

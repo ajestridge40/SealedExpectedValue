@@ -49,6 +49,22 @@ const setSchema = z
     release_date: z.string().nullish(),
     released_on: z.string().nullish(),
     set_symbol_url: z.string().nullish(),
+    // Larger set artwork when the API provides one (field names vary).
+    image_url: z.string().nullish(),
+    logo_url: z.string().nullish(),
+    set_logo_url: z.string().nullish(),
+    set_image_url: z.string().nullish(),
+  })
+  .passthrough();
+
+const categorySchema = z
+  .object({
+    id: z.coerce.number().int().optional(),
+    category_id: z.coerce.number().int().optional(),
+    categoryId: z.coerce.number().int().optional(),
+    name: z.string().optional(),
+    display_name: z.string().optional(),
+    displayName: z.string().optional(),
   })
   .passthrough();
 
@@ -88,6 +104,15 @@ export interface TcgGroup {
   abbreviation: string | null;
   publishedOn: string | null;
   categoryId: number;
+  /** Set artwork/logo when available. */
+  imageUrl?: string | null;
+  /** Small set symbol. */
+  symbolUrl?: string | null;
+}
+
+export interface TcgCategory {
+  categoryId: number;
+  name: string;
 }
 
 export interface TcgProduct {
@@ -194,7 +219,47 @@ export class TcgTrackingProvider implements PricingProvider {
       abbreviation: s.abbreviation || null,
       publishedOn: s.published_on || s.publishedOn || s.release_date || s.released_on || null,
       categoryId,
+      imageUrl: s.image_url || s.logo_url || s.set_logo_url || s.set_image_url || null,
+      symbolUrl: s.set_symbol_url || null,
     }));
+  }
+
+  /**
+   * Every game (TCGplayer category) TCGTracking covers, from its categories
+   * endpoint. Returns null when the endpoint is not available, so callers can
+   * fall back to the games already in the database.
+   */
+  async categories(): Promise<TcgCategory[] | null> {
+    let raw: unknown;
+    try {
+      raw = await this.get("categories");
+    } catch {
+      return null;
+    }
+    const list = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === "object"
+        ? ((raw as Record<string, unknown>).categories ?? (raw as Record<string, unknown>).data ?? null)
+        : null;
+    if (!Array.isArray(list)) return null;
+    const out: TcgCategory[] = [];
+    for (const item of list) {
+      const c = categorySchema.safeParse(item);
+      if (!c.success) continue;
+      const id = c.data.id ?? c.data.category_id ?? c.data.categoryId;
+      const name = c.data.display_name ?? c.data.displayName ?? c.data.name;
+      if (id && name) out.push({ categoryId: id, name });
+    }
+    return out.length ? out : null;
+  }
+
+  /** Drop cached responses for one set (keeps memory flat during full-catalog runs). */
+  forgetSet(categoryId: number, groupId: number): void {
+    for (const key of [...this.cache.keys()]) {
+      const base = `${categoryId}/sets/${groupId}`;
+      if (key === base || key.startsWith(`${base}/`)) this.cache.delete(key);
+    }
+    this.asOfBySet.delete(`${categoryId}:${groupId}`);
   }
 
   async products(categoryId: number, groupId: number): Promise<TcgProduct[]> {

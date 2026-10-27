@@ -157,6 +157,7 @@ export async function refreshPricesNow(_: FormState): Promise<FormState> {
       force: true,
       tcgtracking: config.enableTcgtracking() ? undefined : null,
       pokemontcg: config.enablePokemonTcg() ? new PokemonTcgProvider() : null,
+      timeBudgetMs: 240_000,
     });
     revalidatePath("/", "layout");
     if (report.status === "skipped") return { message: `Skipped: ${report.reason}` };
@@ -189,25 +190,40 @@ export async function importCatalogNow(_: FormState): Promise<FormState> {
 }
 
 const syncInput = z.object({
-  games: z.array(z.string().regex(/^[a-z-]{2,40}$/)).min(1, "Pick at least one game."),
-  maxSets: z.coerce.number().int().min(1).max(100),
+  games: z.array(z.string().regex(/^[a-z0-9-]{2,50}$/)).min(1, "Pick at least one game."),
+  maxSets: z.coerce.number().int().min(0).max(10_000),
+  force: z.boolean(),
 });
 
-/** Add the latest sets of the chosen games from TCGTracking, then refresh their prices. */
+/**
+ * Add sets of the chosen games from TCGTracking with their cards, images and
+ * prices. Stops after ~4 minutes (server action time limit); running it again
+ * continues with the sets not loaded yet. For the full catalog use
+ * `npm run catalog:sync:all` or the GitHub Actions workflow instead.
+ */
 export async function syncLatestSets(_: FormState, formData: FormData): Promise<FormState> {
   await requireAdmin();
-  const parsed = syncInput.safeParse({ games: formData.getAll("games"), maxSets: formData.get("maxSets") });
+  const parsed = syncInput.safeParse({
+    games: formData.getAll("games"),
+    maxSets: formData.get("maxSets"),
+    force: formData.get("force") === "1",
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {
-    const db = createAdminClient();
-    const provider = new TcgTrackingProvider();
-    const sync = await runSetSync(db, { games: parsed.data.games, maxSetsPerGame: parsed.data.maxSets, provider });
-    const ref = await runPriceRefresh(db, { force: true, tcgtracking: provider });
+    const { games, maxSets, force } = parsed.data;
+    const sync = await runSetSync(createAdminClient(), {
+      games: games.includes("all") ? "all" : games,
+      maxSetsPerGame: maxSets,
+      provider: new TcgTrackingProvider(),
+      force,
+      timeBudgetMs: 240_000,
+    });
     revalidatePath("/", "layout");
     const summary =
-      `${sync.setsCreated.length} set(s) added, ${sync.setsLinked.length} linked, ${sync.productsCreated} sealed product(s), ` +
-      `${sync.import?.cardsUpserted ?? 0} card printings; ${ref.snapshotsWritten} prices saved.`;
-    const problems = [...sync.errors, ...(sync.import?.errors ?? []), ...ref.errors];
+      `${sync.setsProcessed} set(s) loaded (${sync.setsCreated.length} new, ${sync.setsSkipped} skipped as recent), ` +
+      `${sync.productsCreated} sealed product(s), ${sync.import.cardsUpserted} card printings, ${sync.pricesWritten} prices saved.` +
+      (sync.setsRemaining ? ` ${sync.setsRemaining} set(s) left: run it again to continue.` : "");
+    const problems = [...sync.errors, ...sync.import.errors];
     return problems.length ? { error: `${summary} Issues: ${problems.slice(0, 5).join(" | ")}` } : { message: summary };
   } catch (err) {
     return { error: (err as Error).message };
